@@ -96,7 +96,7 @@ class NightRideRadio:
     def change_station(self, station):
         self.station = station
         self.get_metadata(station)
-        self.play(station)
+        self.audioPlayer.play(station)
         self.interface.set_station(station)
 
     def get_metadata(self, station):
