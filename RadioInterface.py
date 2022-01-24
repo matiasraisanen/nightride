@@ -120,7 +120,7 @@ class RadioInterface:
         
         if key == "KEY_LEFT":
             self.logger.debug("Previous station")
-            index_of_prev = self.stations.index(self.station)- 1
+            index_of_prev = self.stations.index(self.station) - 1
             if index_of_prev >= 0:
                 prev_station = self.stations[index_of_prev]
                 self.set_station(prev_station)
@@ -142,7 +142,7 @@ class RadioInterface:
             
         if key == "a":
             # Debug for setting a song
-            self.set_now_playing('John wayne', 'the song i like')
+            self.set_now_playing('John Wayne', 'The song I like')
             
         if key == "q":
             exit()
