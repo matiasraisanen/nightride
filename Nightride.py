@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import sseclient
-import threading
+import urllib3
 
 # pip3 install python-vlc sseclient-py
 
