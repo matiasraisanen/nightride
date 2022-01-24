@@ -79,6 +79,11 @@ class RadioInterface:
         stdscr.addstr(4, 3, "...............................................")
         
         stdscr.refresh()
+        
+        self.station_win = curses.newwin(1, 30, 3, 5)
+        self.vol_win = curses.newwin(1, 18, 3, 31)
+        self.now_playing_win = curses.newwin(2, 40, 6, 5)
+        
         self.set_station(self.station)
         self.set_volume_slider(self.volume)
         self.t1 = time.perf_counter()
