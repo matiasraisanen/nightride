@@ -201,8 +201,8 @@ class RadioInterface:
     def set_played(self):
         timenow = time.perf_counter()
         timedelta = int(timenow) - int(self.t1)
-        minutes = int(timedelta / 60) # \d\d
-        seconds = timedelta % 60    # \d\d
+        minutes = int(timedelta / 60)
+        seconds = timedelta % 60
         
         time_to_print = f'Played: {str(minutes).zfill(2)}:{str(seconds).zfill(2)}'
 
@@ -224,8 +224,6 @@ class RadioInterface:
             self.station_win = curses.newwin(1, 23, 3, 5)
             self.station_win.addstr(f'station {n}: {self.station}')
             self.station_win.refresh()
-            # stdscr.addstr(3, 5, f'station: {self.station}')
-            # stdscr.refresh()
         except:
             self.logger.error(f'Failed to set station to {station}')
     
