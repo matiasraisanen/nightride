@@ -1,4 +1,4 @@
 # nightride
 Terminal based player for Nightride FM
 
-![](./nightride.png)
+![](./images/player.gif)
