@@ -124,6 +124,14 @@ class RadioInterface:
                 next_station = self.stations[index_of_next]
                 self.set_station(next_station)
             
+        if key == "KEY_RESIZE":
+            self.station_win.refresh()
+            self.now_playing_win.refresh()
+            self.set_station(self.station)
+            self.set_volume_slider(self.volume)
+            self.set_now_playing(self.now_playing['artist'], self.now_playing['song'])
+            stdscr.refresh()
+            
         if key == "a":
             # Debug for setting a song
             self.set_now_playing('John wayne', 'the song i like')
