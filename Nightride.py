@@ -83,16 +83,10 @@ class NightRideRadio:
     def start(self):
         self.get_metadata(self.station)
         
-    def with_urllib3(self, url, headers):
-        """Get a streaming response for the given event feed using urllib3."""
-        import urllib3
+    def fetch_sse(self, url, headers):
         http = urllib3.PoolManager()
         return http.request('GET', url, preload_content=False, headers=headers)
 
-    def with_requests(self, url, headers):
-        """Get a streaming response for the given event feed using requests."""
-        import requests
-        return requests.get(url, stream=True, headers=headers)
 
     def init_client(self):
         headers = {'Accept': 'text/event-stream'}
