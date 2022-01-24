@@ -161,7 +161,7 @@ class RadioInterface:
             self.vol_win.refresh()
         except:
             self.logger.error(f'Failed to set volume slider to {volume}')
-        
+
     def check_if_too_long(self, word):
         max_length = 30
         if len(word) > max_length:
@@ -186,7 +186,7 @@ class RadioInterface:
             
         try:
             if not skip_timer_reset:
-            self.t1 = time.perf_counter()
+                self.t1 = time.perf_counter()
             
             self.now_playing_win = curses.newwin(2, 40, 6, 5)
             self.now_playing_win.addstr(0, 0, f'Artist: ')
