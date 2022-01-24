@@ -41,14 +41,15 @@ class RadioInterface:
         ### Logger setup finished ###
         
          ### Read config ###
-        config = configparser.ConfigParser()
-        config.read('Nightride.ini')
+        self.config = configparser.ConfigParser()
+        self.config.read('Nightride.ini')
         
-        stationlist = config.items('STATIONS')
+        stationlist = self.config.items('STATIONS')
         self.stations = []
         for key, value in stationlist:
             self.stations.append(value)
             
+        self.VU_METER = self.config.getboolean('SETTINGS', 'VU_METER')
         self.volume = 5
         self.station = 'chillsynth'
         self.orig_time = False
@@ -144,11 +145,19 @@ class RadioInterface:
         if key == "a":
             # Debug for setting a song
             self.set_now_playing('John Wayne', 'The song I like')
-            
+        
+        if key == "s":
+            self.VU_METER = not self.VU_METER
+            self.config.set('SETTINGS', 'VU_METER', f'{self.VU_METER}')
+            self.save_config()
         if key == "q":
             exit()
         
     
+    def save_config(self):
+        with open('Nightride.ini', 'w') as configfile:
+            self.config.write(configfile)
+            
     def set_volume_slider(self, volume):
         self.logger.debug(f'Set volume slider to {volume}')
         try:
@@ -229,11 +238,15 @@ class RadioInterface:
     
     def draw_vu_meter(self):
         # Obviously, this VU meter is purely cosmetic :-)
-        icons = list("▁▂▃▄▅▆▇█")
-        meter_list = []
-        for i in range(10):
-            meter_list.append(random.choice(icons))
-        meter = "".join(meter_list)
+        
+        if self.VU_METER:
+            icons = list("▁▂▃▄▅▆▇█")
+            meter_list = []
+            for i in range(10):
+                meter_list.append(random.choice(icons))
+            meter = "".join(meter_list)
+        else:
+            meter = ""
         
         try:
             vu_win = curses.newwin(1, 15, 8, 35)
