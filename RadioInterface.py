@@ -101,7 +101,7 @@ class RadioInterface:
         key = ''
         try:
             key = stdscr.getkey()
-            self.logger.error(key)
+            self.logger.debug(key)
         except curses.error as e:
             # self.logger.debug('No input from user')
             pass
