@@ -45,9 +45,9 @@ class NightRideRadio:
         
         # Setup warn logging to file
         if alertlog:
-            fileHandler = logging.FileHandler(alertlog)
+            fileHandler = logging.FileHandler(alertlog, mode='w')
             fileHandler.setFormatter(formatter)
-            fileHandler.setLevel(logging.WARNING)
+            fileHandler.setLevel(loglevel)
             self.logger.addHandler(fileHandler)
             self.logger.warning(f'Logging warnings to {alertlog}')
             
@@ -71,7 +71,7 @@ class NightRideRadio:
         self.audioPlayer = AudioPlayer()
         
         # Start curses radio interace
-        self.interface = RadioInterface(alertlog='radio.log')
+        self.interface = RadioInterface(loglevel='debug', alertlog='radio.log')
         
         for x in self.stations:
             self.logger.debug(f'Station {self.stations.index(x)}: {x}')
@@ -126,7 +126,7 @@ class NightRideRadio:
                     turnOffAfter=False)
 
 if __name__ == '__main__':
-    nightRide = NightRideRadio(loglevel='error', alertlog='radio.log')
+    nightRide = NightRideRadio(loglevel='debug', alertlog='radio.log')
     try:
         nightRide.start()
     except KeyboardInterrupt:
