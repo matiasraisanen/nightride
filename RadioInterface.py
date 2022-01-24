@@ -92,6 +92,7 @@ class RadioInterface:
             self.set_played()
             self.draw_vu_meter()
             stdscr.refresh()
+            self.station_win.refresh()
             time.sleep(.1)
     
     def read_key(self, stdscr):
