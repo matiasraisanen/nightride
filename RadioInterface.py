@@ -152,9 +152,21 @@ class RadioInterface:
         except:
             self.logger.error(f'Failed to set volume slider to {volume}')
         
+    def check_if_too_long(self, word):
+        max_length = 30
+        if len(word) > max_length:
+            self.logger.debug(f'Truncating {word} for interface')
+            trunc_word = list(word[0:max_length])
+            trunc_word[-3:] = "..."
+            word = "".join(trunc_word)
+        return word
+    
     def set_now_playing(self, artist, song):
         self.logger.debug(f'Set now playing => A:{artist} S:{song}')
         
+        artist = self.check_if_too_long(artist)
+        song = self.check_if_too_long(song)
+            
         try:
             self.t1 = time.perf_counter()
             
