@@ -151,12 +151,13 @@ class RadioInterface:
     def set_volume_slider(self, volume):
         self.logger.debug(f'Set volume slider to {volume}')
         try:
-            vol_win = curses.newwin(1, 18, 3, 31)
+            
             slider = list('VOL: -==========+')
             slider[int(volume) + 6] = str(volume)
             
-            vol_win.addstr("".join(slider))
-            vol_win.refresh()
+            self.vol_win = curses.newwin(1, 18, 3, 31)
+            self.vol_win.addstr("".join(slider))
+            self.vol_win.refresh()
         except:
             self.logger.error(f'Failed to set volume slider to {volume}')
         
@@ -186,12 +187,12 @@ class RadioInterface:
             if not skip_timer_reset:
             self.t1 = time.perf_counter()
             
-            now_playing_win = curses.newwin(2, 40, 6, 5)
-            now_playing_win.addstr(0, 0, f'Artist: ')
-            now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
-            now_playing_win.addstr(1, 2, f'Song: ')
-            now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
-            now_playing_win.refresh()
+            self.now_playing_win = curses.newwin(2, 40, 6, 5)
+            self.now_playing_win.addstr(0, 0, f'Artist: ')
+            self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
+            self.now_playing_win.addstr(1, 2, f'Song: ')
+            self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
+            self.now_playing_win.refresh()
         except:
             self.logger.error(f'Failed to set nowplaying to A:{artist} S:{song}')
     
@@ -218,10 +219,9 @@ class RadioInterface:
         n = self.stations.index(station)
         try:
             self.station = station
-            station_win = curses.newwin(1, 30, 3, 5)
-            
-            station_win.addstr(f'station {n}: {self.station}')
-            station_win.refresh()
+            self.station_win = curses.newwin(1, 30, 3, 5)
+            self.station_win.addstr(f'station {n}: {self.station}')
+            self.station_win.refresh()
             # stdscr.addstr(3, 5, f'station: {self.station}')
             # stdscr.refresh()
         except:
