@@ -90,7 +90,7 @@ class NightRideRadio:
 
     def init_client(self):
         headers = {'Accept': 'text/event-stream'}
-        self.response = self.with_urllib3(self.SSE_URL, headers)  # or with_requests(url, headers)
+        self.response = self.fetch_sse(self.SSE_URL, headers)
         self.client = sseclient.SSEClient(self.response)
     
     def change_station(self, station):
