@@ -52,6 +52,7 @@ class RadioInterface:
         self.volume = 5
         self.station = 'chillsynth'
         self.orig_time = False
+        self.now_playing = {"artist": "", "song": ""}
         
         t1 = threading.Thread(target=self.run)
         # t1.daemon = True
