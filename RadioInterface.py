@@ -221,7 +221,7 @@ class RadioInterface:
         n = self.stations.index(station)
         try:
             self.station = station
-            self.station_win = curses.newwin(1, 30, 3, 5)
+            self.station_win = curses.newwin(1, 23, 3, 5)
             self.station_win.addstr(f'station {n}: {self.station}')
             self.station_win.refresh()
             # stdscr.addstr(3, 5, f'station: {self.station}')
