@@ -153,7 +153,8 @@ class RadioInterface:
         self.logger.debug(f'Set volume slider to {volume}')
         try:
             
-            slider = list('VOL: -==========+')
+            # slider = list('VOL: -==========+')
+            slider = list('VOL: ◄----------►')
             slider[int(volume) + 6] = str(volume)
             
             self.vol_win = curses.newwin(1, 18, 3, 31)
