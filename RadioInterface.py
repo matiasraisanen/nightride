@@ -162,12 +162,20 @@ class RadioInterface:
         return word
     
     def set_now_playing(self, artist, song):
+        skip_timer_reset = False
+        
+        # Skip played-timer's reset if we're already playing the same song
+        if artist == self.now_playing['artist'] and song == self.now_playing['song']:
+            skip_timer_reset = True
+            
+        self.now_playing = {"artist": artist, "song": song}
         self.logger.debug(f'Set now playing => A:{artist} S:{song}')
         
         artist = self.check_if_too_long(artist)
         song = self.check_if_too_long(song)
             
         try:
+            if not skip_timer_reset:
             self.t1 = time.perf_counter()
             
             now_playing_win = curses.newwin(2, 40, 6, 5)
