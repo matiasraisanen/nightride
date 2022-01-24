@@ -49,7 +49,7 @@ class NightRideRadio:
             fileHandler.setFormatter(formatter)
             fileHandler.setLevel(loglevel)
             self.logger.addHandler(fileHandler)
-            self.logger.warning(f'Logging warnings to {alertlog}')
+            self.logger.info(f'Logging to {alertlog}')
             
         self.logger.debug(f'Logger setup finished for {__name__} module')
         ### Logger setup finished ###
