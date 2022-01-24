@@ -1,4 +1,4 @@
 # nightride
-Terminal based interface for Nightride FM
+Terminal based player for Nightride FM
 
 ![](./nightride.png)
