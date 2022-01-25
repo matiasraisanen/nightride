@@ -20,7 +20,7 @@ except:
 
 
 class NightRideRadio:
-    def __init__(self,  loglevel: str='error', alertlog: str=False):
+    def __init__(self, loglevel: str='error', alertlog: str=False):
         ### Read config ###
         config = configparser.ConfigParser()
         config.read('Nightride.ini')
