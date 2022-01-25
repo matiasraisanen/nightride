@@ -5,6 +5,31 @@ import time
 
 class AudioPlayer:
     def __init__(self, loglevel: str='error', alertlog: str=False):
+
+        ### Logger setup ###
+        if loglevel == 'info':
+            loglevel = logging.INFO
+        elif loglevel == 'debug':
+            loglevel = logging.DEBUG
+        elif loglevel == 'error':
+            loglevel = logging.ERROR
+        else:
+            raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(loglevel)
+        
+        formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s', datefmt='%H:%M:%S')
+        
+        if alertlog:
+            fileHandler = logging.FileHandler(alertlog)
+            fileHandler.setFormatter(formatter)
+            fileHandler.setLevel(loglevel)
+            self.logger.addHandler(fileHandler)
+            self.logger.info(f'Logging to {alertlog}')
+            
+        self.logger.debug(f'Logger setup finished for {__name__} module')
+        ### Logger setup finished ###
+
         self.instance = Instance('--input-repeat=-1', '-q')
         self.player=self.instance.media_player_new()
 
