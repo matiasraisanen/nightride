@@ -79,7 +79,6 @@ class NightRideAPI:
         # self.get_metadata()
 
     def start(self):
-        self.logger.debug('lets start')
         self.get_metadata()
 
     def fetch_sse(self, url, headers):
@@ -87,6 +86,7 @@ class NightRideAPI:
         return http.request('GET', url, preload_content=False, headers=headers)
 
     def init_client(self, sse_url):
+        self.logger.debug(f'Start SSE client')
         headers = {'Accept': 'text/event-stream'}
         self.response = self.fetch_sse(sse_url, headers)
         self.client = sseclient.SSEClient(self.response)
@@ -98,7 +98,6 @@ class NightRideAPI:
         # self.interface.set_station(station)
 
     def get_metadata(self):
-        self.logger.debug(f'Get SSE metadata')
         for event in self.client.events():
             if event.data != "keepalive":
                 data = json.loads(event.data)
