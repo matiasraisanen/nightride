@@ -74,13 +74,15 @@ class RadioInterface:
         
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
         curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_MAGENTA)
+        curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_WHITE)
+        
         
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
         stdscr.addstr(2, 15, "FM", curses.color_pair(2))
         stdscr.addstr(4, 3, "...............................................")
         
         stdscr.refresh()
-        
+        self.menu_win = curses.newwin(0, 0, 1, 30)
         self.station_win = curses.newwin(1, 30, 3, 5)
         self.vol_win = curses.newwin(1, 18, 3, 31)
         self.now_playing_win = curses.newwin(2, 40, 6, 5)
@@ -93,6 +95,7 @@ class RadioInterface:
             self.set_played()
             self.set_now_playing()
             self.draw_vu_meter()
+            self.draw_menu_bar(stdscr)
             stdscr.refresh()
             self.station_win.refresh()
             self.vol_win.refresh()
@@ -135,22 +138,25 @@ class RadioInterface:
                 self.set_station(next_station)
             
         if key == "KEY_RESIZE":
+            # Yeah there is something wrong here... needs fixing.
+            # Some windows vanish
             self.station_win.refresh()
             self.now_playing_win.refresh()
-            self.set_station(self.station)
+            
+            self.station_win = curses.newwin(1, 23, 3, 5)
+            n = self.stations.index(self.station)
+            self.station_win.addstr(f'station {n}: {self.station}')
+            self.station_win.refresh()
+            
             self.set_volume_slider(self.volume)
-            self.set_now_playing(self.now_playing['artist'], self.now_playing['song'])
             stdscr.refresh()
             
-        if key == "a":
-            # Debug for setting a song
-            self.set_now_playing('John Wayne', 'The song I like')
-        
         if key == "s":
             self.VU_METER = not self.VU_METER
             self.config.set('SETTINGS', 'VU_METER', f'{self.VU_METER}')
             self.save_config()
-        if key == "q":
+        
+        if key == "KEY_F(12)":
             exit()
         
     
@@ -263,5 +269,10 @@ class RadioInterface:
         except:
             self.logger.error(f'Failed to draw VU meter')
     
+    def draw_menu_bar(self, stdscr):
+        max_rows, max_cols = stdscr.getmaxyx()
+        self.menu_win = curses.newwin(1, max_cols, 0, 0)
+        self.menu_win.addstr("F1: HELP | F2: STATION | F12: QUIT".ljust(max_cols-1), curses.color_pair(5))
+        self.menu_win.refresh()
 if __name__ == '__main__':
     radio = RadioInterface(loglevel='debug')
