@@ -52,7 +52,7 @@ class AudioPlayer:
         self.player.audio_set_volume(volume_percent)
 
 if __name__ == '__main__':
-    player = AudioPlayer()
+    player = AudioPlayer(loglevel='debug', alertlog='radio.log')
     player.play()
     print("10 second test play of chillsynth!")
     time.sleep(10)
