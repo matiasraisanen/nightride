@@ -7,8 +7,10 @@ import threading
 import random
 import configparser
 
+from NightrideAPI import NightRideAPI
+
 class RadioInterface:
-    def __init__(self, loglevel: str='error', alertlog: str=False):
+    def __init__(self, loglevel: str='error', logfile: str='radio.log'):
         ### Logger setup ###
         if loglevel == 'info':
             loglevel = logging.INFO
@@ -21,28 +23,22 @@ class RadioInterface:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
         
-        # streamHandler = logging.StreamHandler()
         formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s', datefmt='%H:%M:%S')
-        # streamHandler.setFormatter(formatter)
         
-        # self.logger.addHandler(streamHandler)
-        
-        # Setup warn logging to file
-        if alertlog:
-            # fileHandler = logging.FileHandler(alertlog, mode='w')
-            fileHandler = logging.FileHandler(alertlog)
-            fileHandler.setFormatter(formatter)
-            # fileHandler.setLevel(logging.DEBUG)
-            fileHandler.setLevel(logging.WARNING)
-            self.logger.addHandler(fileHandler)
-            self.logger.warning(f'Logging warnings to {alertlog}')
+        fileHandler = logging.FileHandler(logfile)
+        fileHandler.setFormatter(formatter)
+        fileHandler.setLevel(loglevel)
+        self.logger.addHandler(fileHandler)
+        self.logger.info(f'Logging to {logfile}')
             
         self.logger.debug(f'Logger setup finished for {__name__} module')
         ### Logger setup finished ###
         
-         ### Read config ###
+        ### Read config ###
         self.config = configparser.ConfigParser()
         self.config.read('Nightride.ini')
+        
+        self.api = NightRideAPI(loglevel='debug', logfile='radio.log')
         
         stationlist = self.config.items('STATIONS')
         self.stations = []
@@ -50,17 +46,20 @@ class RadioInterface:
             self.stations.append(value)
             
         self.VU_METER = self.config.getboolean('SETTINGS', 'VU_METER')
-        self.volume = 3 # VLC's default volume is 33%
+        self.volume = 5
         self.station = 'chillsynth'
         self.orig_time = False
         self.now_playing = {"artist": "", "song": ""}
         
-        t1 = threading.Thread(target=self.run)
-        # t1.daemon = True
-        t1.start()
+        wrapper(self.main)
+        # t1 = threading.Thread(target=self.run)
+        # # t1.daemon = True
+        # t1.start()
+        # self.api.start()
         
     def run(self):
-        wrapper(self.main)
+        self.api.start()
+        # wrapper(self.main)
         
     def main(self, stdscr):
         # curses.noecho()
@@ -92,6 +91,7 @@ class RadioInterface:
         while True:
             self.read_key(stdscr)
             self.set_played()
+            self.set_now_playing()
             self.draw_vu_meter()
             stdscr.refresh()
             self.station_win.refresh()
@@ -109,16 +109,16 @@ class RadioInterface:
             pass
         
         if key == "+":
-            self.logger.debug("AUDIO PLAYER: VOLUME UP")
             if self.volume < 9:
                 self.volume += 1
                 self.set_volume_slider(self.volume)
+                self.api.audioPlayer.set_volume(self.volume)
             
         if key == "-":
-            self.logger.debug("AUDIO PLAYER: VOLUME DOWN")
             if self.volume > 0:
                 self.volume -= 1
                 self.set_volume_slider(self.volume)
+                self.api.audioPlayer.set_volume(self.volume)
         
         if key == "KEY_LEFT":
             self.logger.debug("Previous station")
@@ -181,35 +181,42 @@ class RadioInterface:
             word = "".join(trunc_word)
         return word
     
-    def set_now_playing(self, artist, song):
-        skip_timer_reset = False
-        
-        # Skip played-timer's reset if we're already playing the same song
-        if artist == self.now_playing['artist'] and song == self.now_playing['song']:
-            skip_timer_reset = True
-            
-        self.now_playing = {"artist": artist, "song": song}
-        self.logger.debug(f'Set now playing => A:{artist} S:{song}')
-        
-        artist = self.check_if_too_long(artist)
-        song = self.check_if_too_long(song)
-            
+    def set_now_playing(self):
         try:
-            if not skip_timer_reset:
-                self.t1 = time.perf_counter()
-            
-            self.now_playing_win = curses.newwin(2, 40, 6, 5)
-            self.now_playing_win.addstr(0, 0, f'Artist: ')
-            self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
-            self.now_playing_win.addstr(1, 2, f'Song: ')
-            self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
-            self.now_playing_win.refresh()
-        except:
-            self.logger.error(f'Failed to set nowplaying to A:{artist} S:{song}')
+            if self.now_playing == self.api.now_playing[self.station]:
+                # Already playing the song, do nothing.
+                pass
+            else:
+                self.now_playing = self.api.now_playing[self.station]
+                artist = self.now_playing['artist']
+                song = self.now_playing['song']
+                self.logger.debug(f'Set now playing => A:{artist} S:{song}')
+                
+                artist = self.check_if_too_long(artist)
+                song = self.check_if_too_long(song)
+                
+                # if not skip_timer_reset:
+                # self.t1 = time.perf_counter()
+                
+                self.now_playing_win = curses.newwin(2, 40, 6, 5)
+                self.now_playing_win.addstr(0, 0, f'Artist: ')
+                self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
+                self.now_playing_win.addstr(1, 2, f'Song: ')
+                self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
+                self.now_playing_win.refresh()
+        except KeyError as e:
+            self.logger.warning(f'No data for station {self.station} yet')
+        except Exception as e:
+            self.logger.error(f'Failed to set now playing: {e}')
     
     def set_played(self):
+        try:
+            current_song_start = self.api.now_playing[self.station]['started_at']
+        except KeyError:
+            self.logger.warning("Could not get current_song_start")
+            current_song_start = 0
         timenow = time.perf_counter()
-        timedelta = int(timenow) - int(self.t1)
+        timedelta = int(timenow) - int(current_song_start)
         minutes = int(timedelta / 60)
         seconds = timedelta % 60
         
@@ -228,6 +235,7 @@ class RadioInterface:
     def set_station(self, station):
         self.logger.debug(f'Set station => {station}')
         n = self.stations.index(station)
+        self.api.audioPlayer.play(station)
         try:
             self.station = station
             self.station_win = curses.newwin(1, 23, 3, 5)
@@ -256,4 +264,4 @@ class RadioInterface:
             self.logger.error(f'Failed to draw VU meter')
     
 if __name__ == '__main__':
-    radio = RadioInterface(alertlog='radio.log')
+    radio = RadioInterface(loglevel='debug')
