@@ -1,5 +1,5 @@
-# Nightride FM Player
-Terminal based player for Nightride FM
+# Nightride FM player
+Terminal based player for [Nightride FM](https://nightride.fm/)
 
 ![](./images/player.gif)
 
