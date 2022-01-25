@@ -1,9 +1,10 @@
 
 from vlc import Instance
+import logging
 import time
 
 class AudioPlayer:
-    def __init__(self):
+    def __init__(self, loglevel: str='error', alertlog: str=False):
         self.instance = Instance('--input-repeat=-1', '-q')
         self.player=self.instance.media_player_new()
 
