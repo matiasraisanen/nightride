@@ -18,6 +18,13 @@ class AudioPlayer:
     def get_info(self):
         self.player.print_info()
 
+    def set_volume(self, volume):
+        self.logger.debug(f'Set volume to {volume}')
+        # Volume must be times eleven, so we can reach close to 100% max volume :-D
+        # Hey at least it's linear!
+        volume_percent = volume * 11
+        self.player.audio_set_volume(volume_percent)
+
 if __name__ == '__main__':
     player = AudioPlayer()
     player.play()
