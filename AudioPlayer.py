@@ -4,7 +4,7 @@ import logging
 import time
 
 class AudioPlayer:
-    def __init__(self, loglevel: str='error', alertlog: str=False):
+    def __init__(self, base_url, loglevel: str='error', logfile: str='radio.log'):
 
         ### Logger setup ###
         if loglevel == 'info':
@@ -20,21 +20,21 @@ class AudioPlayer:
         
         formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s', datefmt='%H:%M:%S')
         
-        if alertlog:
-            fileHandler = logging.FileHandler(alertlog)
-            fileHandler.setFormatter(formatter)
-            fileHandler.setLevel(loglevel)
-            self.logger.addHandler(fileHandler)
-            self.logger.info(f'Logging to {alertlog}')
+        fileHandler = logging.FileHandler(logfile)
+        fileHandler.setFormatter(formatter)
+        fileHandler.setLevel(loglevel)
+        self.logger.addHandler(fileHandler)
+        self.logger.info(f'Logging to {logfile}')
             
         self.logger.debug(f'Logger setup finished for {__name__} module')
         ### Logger setup finished ###
 
         self.instance = Instance('--input-repeat=-1', '-q')
         self.player=self.instance.media_player_new()
+        self.base_url = base_url
 
     def play(self, station: str='chillsynth'):
-        self.media=self.instance.media_new(f'https://stream.nightride.fm/{station}.m4a')
+        self.media=self.instance.media_new(f'{self.base_url}/{station}.m4a')
         self.player.set_media(self.media)
         self.player.play()
 
@@ -45,14 +45,14 @@ class AudioPlayer:
         self.player.print_info()
 
     def set_volume(self, volume):
-        self.logger.debug(f'Set volume to {volume}')
         # Volume must be times eleven, so we can reach close to 100% max volume :-D
         # Hey at least it's linear!
         volume_percent = volume * 11
+        self.logger.debug(f'Set volume to {volume_percent}%')
         self.player.audio_set_volume(volume_percent)
 
 if __name__ == '__main__':
-    player = AudioPlayer(loglevel='debug', alertlog='radio.log')
+    player = AudioPlayer(loglevel='debug', logfile='radio.log')
     player.play()
     print("10 second test play of chillsynth!")
     time.sleep(10)
