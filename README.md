@@ -6,11 +6,11 @@ Terminal based player for [Nightride FM](https://nightride.fm/)
 
 ## Project structure
 
-[NightrideAPI.py](./Nightride.py)  
-API that handles pretty much all the internal operations. This is what glues the Nightride.fm and my player together
+[NightrideAPI.py](./NightrideAPI.py)  
+Handles pretty much all the internal operations. This is what glues the Nightride.fm and my player together
 
 
-[Radio.py](./RadioInterface.py)  
+[Radio.py](./Radio.py)  
 Text interface for radio. Handles user input, and calls the API accordinly.
 
 
