@@ -272,7 +272,20 @@ class RadioInterface:
     def draw_menu_bar(self, stdscr):
         max_rows, max_cols = stdscr.getmaxyx()
         self.menu_win = curses.newwin(1, max_cols, 0, 0)
-        self.menu_win.addstr("F1: HELP | F2: STATION | F12: QUIT".ljust(max_cols-1), curses.color_pair(5))
+        # self.bot_menu_win = curses.newwin(1, max_cols, 12, 0)
+        try:
+            self.menu_win.addstr("F1: HELP | F2: STATION | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+        except curses.error:
+            # Accursed curses raises an error if you write in the last column.
+            # We will discard that...
+            pass
+        # try:
+        #     pattern = list("░▒▓█▓▒░"*20)
+        #     self.bot_menu_win.addstr("".join(pattern[0:max_cols]), curses.color_pair(2))
+        #     # self.bot_menu_win.addstr("asdf", curses.color_pair(3))
+        # except curses.error:
+        #     pass
         self.menu_win.refresh()
+        # self.bot_menu_win.refresh()
 if __name__ == '__main__':
     radio = RadioInterface(loglevel='debug')
