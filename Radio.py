@@ -111,9 +111,9 @@ class RadioInterface:
         key = ''
         try:
             key = stdscr.getkey()
-            self.logger.debug(key)
+            self.logger.debug(f'User pressed key {key}')
         except curses.error as e:
-            # self.logger.debug('No input from user')
+            # No input from user. Let's pass.
             pass
         
         if key == "+":
