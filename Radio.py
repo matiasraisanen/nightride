@@ -38,6 +38,12 @@ class RadioInterface:
         self.config = configparser.ConfigParser()
         self.config.read('Nightride.ini')
         
+        self.LCD1602_MODULE = self.config.getboolean('ADDONS', 'LCD1602')
+        if self.LCD1602_MODULE:
+            self.logger.debug(f'Initializing lcd module')
+            import RGB1602
+            self.lcd = RGB1602.RGB1602(16,2, 'error', alertlog='radio.log')
+        
         self.api = NightRideAPI(loglevel='debug', logfile='radio.log')
         
         stationlist = self.config.items('STATIONS')
@@ -52,11 +58,9 @@ class RadioInterface:
         self.now_playing = {"artist": "", "song": ""}
         
         wrapper(self.main)
-        # t1 = threading.Thread(target=self.run)
-        # # t1.daemon = True
-        # t1.start()
-        # self.api.start()
         
+        
+            
     def run(self):
         self.api.start()
         # wrapper(self.main)
@@ -210,6 +214,9 @@ class RadioInterface:
                 self.now_playing_win.addstr(1, 2, f'Song: ')
                 self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
                 self.now_playing_win.refresh()
+                
+                if self.LCD1602_MODULE:
+                    self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False)
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
@@ -288,4 +295,11 @@ class RadioInterface:
         self.menu_win.refresh()
         # self.bot_menu_win.refresh()
 if __name__ == '__main__':
-    radio = RadioInterface(loglevel='debug')
+    try:
+        radio = RadioInterface(loglevel='debug')
+    except KeyboardInterrupt:
+        radio.audioPlayer.stop()
+    
+    if radio.LCD1602_MODULE:
+            radio.lcd.clear()
+            radio.lcd.turnOff()
