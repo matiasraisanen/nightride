@@ -10,13 +10,6 @@ import threading
 
 from AudioPlayer import AudioPlayer
 
-try:
-    import RGB1602
-except:
-    print("No RGBMODULE")
-
-
-
 class NightRideAPI:
     def __init__(self, loglevel: str='error', logfile: str='radio.log'):
         ### Read config ###
@@ -54,11 +47,6 @@ class NightRideAPI:
         for key, value in stationlist:
             self.stations.append(value)
         
-        # Setup LCD module, if present
-        self.LCD1602_MODULE = config.getboolean('ADDONS', 'LCD1602')
-        if self.LCD1602_MODULE:
-            self.lcd = RGB1602.RGB1602(16,2, 'error', alertlog='radio.log')
-        
         # Initialize SSE client
         self.init_client(SSE_URL)
         
@@ -72,11 +60,10 @@ class NightRideAPI:
         self.station = 'chillsynth'
         self.now_playing = {}
         self.audioPlayer.play(self.station)
-        
+
+        # TODO: Threading needs to be swapped to multiprocessing.
         thread_1 = threading.Thread(target=self.start)
-        # t1.daemon = True
         thread_1.start()
-        # self.get_metadata()
 
     def start(self):
         self.get_metadata()
@@ -90,12 +77,6 @@ class NightRideAPI:
         headers = {'Accept': 'text/event-stream'}
         self.response = self.fetch_sse(sse_url, headers)
         self.client = sseclient.SSEClient(self.response)
-    
-    def set_station(self, station):
-        self.station = station
-        # self.get_metadata(station)
-        self.audioPlayer.play(station)
-        # self.interface.set_station(station)
 
     def get_metadata(self):
         for event in self.client.events():
@@ -126,11 +107,6 @@ class NightRideAPI:
                 }
                 self.now_playing[station] = current
                 self.logger.debug(f'New song on {station} => {artist} - {title}')
-                
-                # if self.LCD1602_MODULE:
-                #     self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=title,
-                # color='GREEN',
-                # turnOffAfter=False)
 
 if __name__ == '__main__':
     nightRide = NightRideAPI(loglevel='debug')
@@ -138,7 +114,3 @@ if __name__ == '__main__':
         nightRide.start()
     except KeyboardInterrupt:
         nightRide.audioPlayer.stop()
-        
-        if nightRide.LCD1602_MODULE:
-            nightRide.lcd.clear()
-            nightRide.lcd.turnOff()
