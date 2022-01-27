@@ -61,8 +61,8 @@ class NightRideAPI:
         self.now_playing = {}
         self.audioPlayer.play(self.station)
 
-        # TODO: Threading needs to be swapped to multiprocessing.
         thread_1 = threading.Thread(target=self.start)
+        thread_1.daemon = True
         thread_1.start()
 
     def start(self):
