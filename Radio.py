@@ -295,10 +295,8 @@ class RadioInterface:
         self.menu_win.refresh()
         # self.bot_menu_win.refresh()
 if __name__ == '__main__':
-    try:
-        radio = RadioInterface(loglevel='debug')
-    except KeyboardInterrupt:
-        radio.audioPlayer.stop()
+    
+    radio = RadioInterface(loglevel='debug')
     
     if radio.LCD1602_MODULE:
             radio.lcd.clear()
