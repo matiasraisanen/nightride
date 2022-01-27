@@ -150,7 +150,7 @@ class RadioInterface:
             
             self.station_win = curses.newwin(1, 23, 3, 5)
             n = self.stations.index(self.station)
-            self.station_win.addstr(f'station {n}: {self.station}')
+            self.station_win.addstr(f'station {n+1}: {self.station}')
             self.station_win.refresh()
             
             self.set_volume_slider(self.volume)
@@ -253,7 +253,7 @@ class RadioInterface:
         try:
             self.station = station
             self.station_win = curses.newwin(1, 23, 3, 5)
-            self.station_win.addstr(f'station {n}: {self.station}')
+            self.station_win.addstr(f'station {n+1}: {self.station}')
             self.station_win.refresh()
         except:
             self.logger.error(f'Failed to set station to {station}')
