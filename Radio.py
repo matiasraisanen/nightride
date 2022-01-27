@@ -282,7 +282,7 @@ class RadioInterface:
         self.menu_win = curses.newwin(1, max_cols, 0, 0)
         # self.bot_menu_win = curses.newwin(1, max_cols, 12, 0)
         try:
-            self.menu_win.addstr("F1: HELP | F2: STATION | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+            self.menu_win.addstr("F1: HELP | ←/→: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
         except curses.error:
             # Accursed curses raises an error if you write in the last column.
             # We will discard that...
