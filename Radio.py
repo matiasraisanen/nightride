@@ -52,7 +52,8 @@ class RadioInterface:
             self.stations.append(value)
             
         self.VU_METER = self.config.getboolean('SETTINGS', 'VU_METER')
-        self.volume = 3
+        self.volume = 4
+        self.api.audioPlayer.set_volume(self.volume)
         self.station = 'chillsynth'
         self.orig_time = False
         self.now_playing = {"artist": "", "song": ""}
