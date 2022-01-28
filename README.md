@@ -3,7 +3,7 @@ Text-based player for [Nightride FM](https://nightride.fm/) synthwave radio.
 
 ![](./images/player.gif)
 
-Font must be provided by the terminal emulator you are using. Font used in screenshot is [VCR OSD Mono](https://www.dafont.com/vcr-osd-mono.font).
+The font used is determined by the terminal emulator you are using. The font in screenshot is [VCR OSD Mono](https://www.dafont.com/vcr-osd-mono.font).
 
 ## Project structure
 
