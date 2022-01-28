@@ -3,6 +3,7 @@ Terminal based player for [Nightride FM](https://nightride.fm/)
 
 ![](./images/player.gif)
 
+Font must be provided by the terminal emulator you are using. Font used in screenshot is [VCR OSD Mono](https://www.dafont.com/vcr-osd-mono.font).
 
 ## Project structure
 
