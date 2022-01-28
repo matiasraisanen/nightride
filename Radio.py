@@ -163,6 +163,41 @@ class RadioInterface:
         
         if key == "KEY_F(12)":
             exit()
+        if key == "KEY_F(1)":
+            self.panwin = curses.newwin(10,50, 2,2)
+            self.panwin.erase()
+            self.panwin.box()
+            self.panwin.addstr(1, 21, ">>ABOUT<<", curses.color_pair(5))
+            
+            self.panwin.addstr(2, 2, "CREATOR:", curses.color_pair(3))
+            self.panwin.addstr(2, 10, " Matias Räisänen 2022 ", curses.color_pair(6))
+            
+            self.panwin.addstr(3, 4, "EMAIL:", curses.color_pair(3))
+            self.panwin.addstr(3, 10, " matias@matiasraisanen.com ", curses.color_pair(6))
+            
+            self.panwin.addstr(4, 3, "SOURCE:", curses.color_pair(3))
+            self.panwin.addstr(4, 10, " github.com/matiasraisanen/nightride ", curses.color_pair(6))
+            
+            self.panwin.addstr(6, 2, "Player for Nightride.fm (https://nightride.fm)")
+            self.panwin.addstr(8, 32, "(HIT F1 TO CLOSE)", curses.color_pair(7))
+
+            panel = curses.panel.new_panel(self.panwin)
+            panel.top()
+            curses.panel.update_panels()
+            stdscr.refresh()
+            
+            while True:
+                key = ''
+                try:
+                    key = stdscr.getkey()
+                    self.logger.debug(f'User pressed key {key}')
+                except curses.error as e:
+                    # No input from user. Let's pass.
+                    pass
+                
+                if key == "KEY_F(1)":
+                    break
+                
         
     
     def save_config(self):
