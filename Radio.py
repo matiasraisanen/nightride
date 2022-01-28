@@ -1,5 +1,6 @@
 import curses
 from curses import wrapper
+import curses.panel
 from curses.textpad import rectangle
 import logging
 import time
