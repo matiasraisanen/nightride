@@ -1,5 +1,5 @@
 # Nightride FM player
-Terminal based player for [Nightride FM](https://nightride.fm/)
+Text-based player for [Nightride FM](https://nightride.fm/) synthwave radio.
 
 ![](./images/player.gif)
 
