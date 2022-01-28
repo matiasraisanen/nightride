@@ -5,6 +5,8 @@ Text-based player for [Nightride FM](https://nightride.fm/) synthwave radio.
 
 The font used is determined by the terminal emulator you are using. The font in screenshot is [VCR OSD Mono](https://www.dafont.com/vcr-osd-mono.font).
 
+The color scheme can also be affected by your terminal settings.
+
 ## Project structure
 
 [NightrideAPI.py](./NightrideAPI.py)  
