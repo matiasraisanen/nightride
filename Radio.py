@@ -170,8 +170,7 @@ class RadioInterface:
             self.panwin = curses.newwin(10,50, 2,2)
             self.panwin.erase()
             self.panwin.box()
-            self.panwin.addstr(1, 21, ">>ABOUT<<", curses.color_pair(5))
-            
+            self.panwin.addstr(0, 20, ">>ABOUT<<", curses.color_pair(5))
             self.panwin.addstr(2, 2, "CREATOR:", curses.color_pair(3))
             self.panwin.addstr(2, 10, " Matias Räisänen 2022 ", curses.color_pair(6))
             
