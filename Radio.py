@@ -259,7 +259,7 @@ class RadioInterface:
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
-            self.logger.error(f'Failed to set now playing: {e}')
+            self.logger.error(f'Failed to set now playing: {e} A:{artist} S:{song}')
     
     def set_played(self):
         try:
