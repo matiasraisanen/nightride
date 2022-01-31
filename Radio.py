@@ -171,17 +171,18 @@ class RadioInterface:
             self.panwin.erase()
             self.panwin.box()
             self.panwin.addstr(0, 20, ">>ABOUT<<", curses.color_pair(5))
-            self.panwin.addstr(2, 2, "CREATOR:", curses.color_pair(3))
+            self.panwin.addstr(2, 3, "AUTHOR:", curses.color_pair(3))
             self.panwin.addstr(2, 10, " Matias Räisänen 2022 ", curses.color_pair(6))
             
-            self.panwin.addstr(3, 4, "EMAIL:", curses.color_pair(3))
+            self.panwin.addstr(3, 2, "CONTACT:", curses.color_pair(3))
             self.panwin.addstr(3, 10, " matias@matiasraisanen.com ", curses.color_pair(6))
             
             self.panwin.addstr(4, 3, "SOURCE:", curses.color_pair(3))
             self.panwin.addstr(4, 10, " github.com/matiasraisanen/nightride ", curses.color_pair(6))
             
-            self.panwin.addstr(6, 2, "Player for Nightride.fm (https://nightride.fm)")
-            self.panwin.addstr(8, 32, "(HIT F1 TO CLOSE)", curses.color_pair(7))
+            self.panwin.addstr(6, 2, "Player for Nightride.fm")
+            self.panwin.addstr(7, 2, "(https://nightride.fm)")
+            self.panwin.addstr(8, 31, "(HIT F1 TO CLOSE)", curses.color_pair(7))
 
             panel = curses.panel.new_panel(self.panwin)
             panel.top()
