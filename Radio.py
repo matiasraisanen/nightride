@@ -62,7 +62,7 @@ class RadioInterface:
             "artist_short": "", 
             "song": "", 
             "song_short": ""}
-        
+        self.version = "v0.1"
         wrapper(self.main)
         
         
@@ -178,6 +178,9 @@ class RadioInterface:
             self.panwin.addstr(4, 3, "SOURCE:", curses.color_pair(3))
             self.panwin.addstr(4, 10, " github.com/matiasraisanen/nightride ", curses.color_pair(6))
             
+            self.panwin.addstr(5, 2, "VERSION:", curses.color_pair(3))
+            self.panwin.addstr(5, 10, f' {self.version}',  curses.color_pair(6))
+
             self.panwin.addstr(6, 2, "Player for Nightride.fm")
             self.panwin.addstr(7, 2, "(https://nightride.fm)")
             self.panwin.addstr(8, 31, "(HIT F1 TO CLOSE)", curses.color_pair(7))
@@ -198,7 +201,8 @@ class RadioInterface:
                 
                 if key == "KEY_F(1)":
                     break
-                
+                if key == "KEY_F(12)":
+                    exit()
         
     
     def save_config(self):
