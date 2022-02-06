@@ -57,7 +57,11 @@ class RadioInterface:
         self.api.audioPlayer.set_volume(self.volume)
         self.station = self.config['SETTINGS']['default_station']
         self.orig_time = False
-        self.now_playing = {"artist": "", "song": ""}
+        self.now_playing = {
+            "artist": "", 
+            "artist_short": "", 
+            "song": "", 
+            "song_short": ""}
         
         wrapper(self.main)
         
@@ -88,26 +92,20 @@ class RadioInterface:
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
         stdscr.addstr(2, 15, "FM", curses.color_pair(2))
         stdscr.addstr(4, 3, "...............................................")
-        
-        stdscr.refresh()
-        self.menu_win = curses.newwin(0, 0, 1, 30)
-        self.station_win = curses.newwin(1, 30, 3, 5)
-        self.vol_win = curses.newwin(1, 18, 3, 31)
-        self.now_playing_win = curses.newwin(2, 40, 6, 5)
+        self.draw_now_playing_win()
         
         self.set_station(self.station)
         self.set_volume_slider(self.volume)
         self.t1 = time.perf_counter()
         while True:
             self.read_key(stdscr)
-            self.set_played()
-            self.set_now_playing()
+            self.set_playtime()
+            self.draw_now_playing_win()
             self.draw_vu_meter()
             self.draw_menu_bar(stdscr)
+            self.draw_station_win()
+            self.draw_volume_win()
             stdscr.refresh()
-            self.station_win.refresh()
-            self.vol_win.refresh()
-            self.now_playing_win.refresh()
             time.sleep(.1)
     
     def read_key(self, stdscr):
@@ -210,8 +208,6 @@ class RadioInterface:
     def set_volume_slider(self, volume):
         self.logger.debug(f'Set volume slider to {volume}')
         try:
-            
-            # slider = list('VOL: -==========+')
             slider = list('VOL: ◄----------►')
             slider[int(volume) + 6] = str(volume)
             
@@ -221,15 +217,44 @@ class RadioInterface:
         except:
             self.logger.error(f'Failed to set volume slider to {volume}')
 
-    def check_if_too_long(self, word):
-        max_length = 30
+    def shorten(self, word):
+        max_length = 29
         if len(word) > max_length:
             self.logger.debug(f'Truncating {word} for interface')
             trunc_word = list(word[0:max_length])
             trunc_word[-3:] = "..."
             word = "".join(trunc_word)
+            self.logger.debug(f'Truncated into {word}')
         return word
     
+    def draw_now_playing_win(self):
+        self.set_now_playing()
+        artist = self.now_playing['artist_short']
+        song = self.now_playing['song_short']
+
+        self.now_playing_win = curses.newwin(2, 40, 6, 5)
+        self.now_playing_win.addstr(0, 0, f'Artist: ')
+        self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
+        self.now_playing_win.addstr(1, 2, f'Song: ')
+        self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
+        self.now_playing_win.refresh()
+
+    def draw_station_win(self):
+        n = self.stations.index(self.station)
+        self.station_win = curses.newwin(1, 23, 3, 5)
+        self.station_win.addstr(f'station {n+1}: {self.station}')
+        self.station_win.refresh()
+
+    def draw_volume_win(self):
+        try:
+            slider = list('VOL: ◄----------►')
+            slider[int(self.volume) + 6] = str(self.volume)
+            
+            self.vol_win = curses.newwin(1, 18, 3, 31)
+            self.vol_win.addstr("".join(slider))
+            self.vol_win.refresh()
+        except:
+            self.logger.error(f'Failed to draw volume window')
     def set_now_playing(self):
         try:
             if self.now_playing == self.api.now_playing[self.station]:
@@ -239,29 +264,16 @@ class RadioInterface:
                 self.now_playing = self.api.now_playing[self.station]
                 artist = self.now_playing['artist']
                 song = self.now_playing['song']
-                self.logger.debug(f'Set now playing => A:{artist} S:{song}')
-                
-                artist = self.check_if_too_long(artist)
-                song = self.check_if_too_long(song)
-                
-                # if not skip_timer_reset:
-                # self.t1 = time.perf_counter()
-                
-                self.now_playing_win = curses.newwin(2, 40, 6, 5)
-                self.now_playing_win.addstr(0, 0, f'Artist: ')
-                self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
-                self.now_playing_win.addstr(1, 2, f'Song: ')
-                self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
-                self.now_playing_win.refresh()
-                
+                self.now_playing['artist_short'] = self.shorten(artist)
+                self.now_playing['song_short'] = self.shorten(song)
                 if self.LCD1602_MODULE:
                     self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False)
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
-            self.logger.error(f'Failed to set now playing: {e} A:{artist} S:{song}')
+            self.logger.error(f'Failed to set now playing: {e}')
     
-    def set_played(self):
+    def set_playtime(self):
         try:
             current_song_start = self.api.now_playing[self.station]['started_at']
         except KeyError:
@@ -274,25 +286,22 @@ class RadioInterface:
         
         time_to_print = f'Played: {str(minutes).zfill(2)}:{str(seconds).zfill(2)}'
 
-        if time_to_print != self.orig_time:
-            try:
-                time_played_win = curses.newwin(1, 20, 8, 5)
-                time_played_win.addstr(time_to_print)
-                time_played_win.refresh()
-            except:
-                self.logger.erro(f'Failed to draw time played.')
+        # if time_to_print != self.orig_time:
+        try:
+            time_played_win = curses.newwin(1, 20, 8, 5)
+            time_played_win.addstr(time_to_print)
+            time_played_win.refresh()
+        except:
+            self.logger.error(f'Failed to draw time played.')
         self.orig_time = time_to_print
         
         
     def set_station(self, station):
         self.logger.debug(f'Set station => {station}')
-        n = self.stations.index(station)
         self.api.audioPlayer.play(station)
         try:
             self.station = station
-            self.station_win = curses.newwin(1, 23, 3, 5)
-            self.station_win.addstr(f'station {n+1}: {self.station}')
-            self.station_win.refresh()
+            
         except:
             self.logger.error(f'Failed to set station to {station}')
     
