@@ -165,7 +165,7 @@ class RadioInterface:
         if key == "KEY_F(12)":
             exit()
         if key == "KEY_F(1)":
-            self.panwin = curses.newwin(10,50, 2,2)
+            self.panwin = curses.newwin(9,49, 2,2)
             self.panwin.erase()
             self.panwin.box()
             self.panwin.addstr(0, 20, ">>ABOUT<<", curses.color_pair(5))
@@ -183,7 +183,7 @@ class RadioInterface:
 
             self.panwin.addstr(6, 2, "Player for Nightride.fm")
             self.panwin.addstr(7, 2, "(https://nightride.fm)")
-            self.panwin.addstr(8, 31, "(HIT F1 TO CLOSE)", curses.color_pair(7))
+            self.panwin.addstr(8, 31, "(F1 TO CLOSE)", curses.color_pair(7))
 
             panel = curses.panel.new_panel(self.panwin)
             panel.top()
@@ -333,7 +333,7 @@ class RadioInterface:
         self.menu_win = curses.newwin(1, max_cols, 0, 0)
         # self.bot_menu_win = curses.newwin(1, max_cols, 12, 0)
         try:
-            self.menu_win.addstr("F1: HELP | ←/→: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+            self.menu_win.addstr("F1: ABOUT | ←/→: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
         except curses.error:
             # Accursed curses raises an error if you write in the last column.
             # We will discard that...
