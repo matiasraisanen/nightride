@@ -1,14 +1,12 @@
-import curses
-from curses import wrapper
-import curses.panel
-from curses.textpad import rectangle
-import logging
-import time
-import threading
-import random
-import configparser
 import argparse
-import sys
+import configparser
+import curses
+import curses.panel
+import curses.textpad
+import logging
+import random
+import time
+
 from NightrideAPI import NightRideAPI
 
 class RadioInterface:
@@ -74,7 +72,7 @@ class RadioInterface:
             "song": "", 
             "song_short": ""}
         self.version = "v0.1"
-        wrapper(self.main)
+        curses.wrapper(self.main)
         
         
             
@@ -88,7 +86,7 @@ class RadioInterface:
         curses.start_color()
         
         stdscr.nodelay(True)
-        rectangle(stdscr, 2, 2, 10, 50)
+        curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
         
         curses.init_pair(1, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
         curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)
