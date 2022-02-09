@@ -4,6 +4,7 @@ import curses
 import curses.panel
 import curses.textpad
 import logging
+import os
 import random
 import time
 
@@ -21,7 +22,15 @@ class RadioInterface:
         parser.print_usage()
         # time.sleep(2)
         # sys.exit(1)
+
         ### Logger setup ###
+        
+        # Delete old logfile if it exists
+        if os.path.exists(logfile):
+            os.remove(logfile)
+        else:
+            pass
+
         if loglevel == 'info':
             loglevel = logging.INFO
         elif loglevel == 'debug':
