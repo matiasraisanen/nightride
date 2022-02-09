@@ -23,8 +23,8 @@ class NightRideAPI:
             loglevel = logging.DEBUG
         elif loglevel == 'error':
             loglevel = logging.ERROR
-        else:
-            raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
+        # else:
+        #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
         
@@ -51,7 +51,7 @@ class NightRideAPI:
         self.init_client(SSE_URL)
         
         # Initialize audio player
-        self.audioPlayer = AudioPlayer(base_url=AUDIO_STREAM_BASE_URL, loglevel='debug')
+        self.audioPlayer = AudioPlayer(base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel)
         
         
         for x in self.stations:

@@ -7,11 +7,22 @@ import time
 import threading
 import random
 import configparser
-
+import argparse
+import sys
 from NightrideAPI import NightRideAPI
 
 class RadioInterface:
     def __init__(self, loglevel: str='error', logfile: str='radio.log'):
+        ### ArgParse ###
+        parser = argparse.ArgumentParser(description='Text-based user interface for Nightride.fm.')
+
+        args = parser.parse_args()
+        # with open('help.txt', 'w') as helpfile:
+        #     parser.print_help(file=helpfile)
+        # print(args)
+        parser.print_usage()
+        # time.sleep(2)
+        # sys.exit(1)
         ### Logger setup ###
         if loglevel == 'info':
             loglevel = logging.INFO
@@ -19,8 +30,8 @@ class RadioInterface:
             loglevel = logging.DEBUG
         elif loglevel == 'error':
             loglevel = logging.ERROR
-        else:
-            raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
+        # else:
+        #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
         
@@ -45,7 +56,7 @@ class RadioInterface:
             import RGB1602
             self.lcd = RGB1602.RGB1602(16,2, 'error', alertlog='radio.log')
         
-        self.api = NightRideAPI(loglevel='debug', logfile='radio.log')
+        self.api = NightRideAPI(loglevel=loglevel, logfile='radio.log')
         
         stationlist = self.config.items('STATIONS')
         self.stations = []
@@ -144,8 +155,6 @@ class RadioInterface:
                 self.set_station(next_station)
             
         if key == "KEY_RESIZE":
-            # Yeah there is something wrong here... needs fixing.
-            # Some windows vanish
             self.station_win.refresh()
             self.now_playing_win.refresh()
             
@@ -348,7 +357,7 @@ class RadioInterface:
         # self.bot_menu_win.refresh()
 if __name__ == '__main__':
     
-    radio = RadioInterface(loglevel='debug')
+    radio = RadioInterface(loglevel='info')
     
     if radio.LCD1602_MODULE:
             radio.lcd.clear()
