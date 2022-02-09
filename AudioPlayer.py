@@ -13,8 +13,8 @@ class AudioPlayer:
             loglevel = logging.DEBUG
         elif loglevel == 'error':
             loglevel = logging.ERROR
-        else:
-            raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
+        # else:
+        #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
         
