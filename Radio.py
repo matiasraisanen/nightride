@@ -135,18 +135,25 @@ class RadioInterface:
             # No input from user. Let's pass.
             pass
         
+        # Change channels inputting numbers
+        if key in ["1", "2", "3", "4", "5", "6", "7", "8"]:
+            self.set_station(self.stations[int(key)-1])
+        
+        # Volume up
         if key == "+":
             if self.volume < 9:
                 self.volume += 1
                 self.set_volume_slider(self.volume)
                 self.api.audioPlayer.set_volume(self.volume)
             
+        # Volume down
         if key == "-":
             if self.volume > 0:
                 self.volume -= 1
                 self.set_volume_slider(self.volume)
                 self.api.audioPlayer.set_volume(self.volume)
         
+        # Previous station
         if key == "KEY_LEFT":
             self.logger.debug("Previous station")
             index_of_prev = self.stations.index(self.station) - 1
@@ -154,6 +161,7 @@ class RadioInterface:
                 prev_station = self.stations[index_of_prev]
                 self.set_station(prev_station)
             
+        # Next station
         if key == "KEY_RIGHT":
             self.logger.debug("Next station")
             index_of_next = self.stations.index(self.station) + 1
@@ -161,6 +169,7 @@ class RadioInterface:
                 next_station = self.stations[index_of_next]
                 self.set_station(next_station)
             
+        # Resize window
         if key == "KEY_RESIZE":
             self.station_win.refresh()
             self.now_playing_win.refresh()
@@ -173,13 +182,17 @@ class RadioInterface:
             self.set_volume_slider(self.volume)
             stdscr.refresh()
             
+        # Disable VU meter
         if key == "s":
             self.VU_METER = not self.VU_METER
             self.config.set('SETTINGS', 'VU_METER', f'{self.VU_METER}')
             self.save_config()
         
+        # Quit
         if key == "KEY_F(12)":
             exit()
+        
+        # Show "About" info
         if key == "KEY_F(1)":
             self.panwin = curses.newwin(9,49, 2,2)
             self.panwin.erase()
