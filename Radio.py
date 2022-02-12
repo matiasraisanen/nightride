@@ -254,9 +254,20 @@ class RadioInterface:
 
         self.now_playing_win = curses.newwin(2, 40, 6, 5)
         self.now_playing_win.addstr(0, 0, f'Artist: ')
-        self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
         self.now_playing_win.addstr(1, 2, f'Song: ')
-        self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
+        
+        # Erroneous artist/song titles will be replaced with ???ERR
+        fail_title = '???ERR'
+        try:
+            self.now_playing_win.addstr(0, 8, f' {artist} ', curses.color_pair(3))
+        except:
+            self.now_playing_win.addstr(0, 8, f' {fail_title} ', curses.color_pair(3))
+            
+        try:
+            self.now_playing_win.addstr(1, 8, f' {song} ', curses.color_pair(4))
+        except:
+            self.now_playing_win.addstr(1, 8, f' {fail_title} ', curses.color_pair(4))
+            
         self.now_playing_win.refresh()
 
     def draw_station_win(self):
