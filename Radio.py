@@ -16,12 +16,7 @@ class RadioInterface:
         parser = argparse.ArgumentParser(description='Text-based user interface for Nightride.fm.')
 
         args = parser.parse_args()
-        # with open('help.txt', 'w') as helpfile:
-        #     parser.print_help(file=helpfile)
-        # print(args)
         parser.print_usage()
-        # time.sleep(2)
-        # sys.exit(1)
 
         ### Logger setup ###
         
