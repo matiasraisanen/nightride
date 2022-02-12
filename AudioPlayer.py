@@ -34,11 +34,13 @@ class AudioPlayer:
         self.base_url = base_url
 
     def play(self, station: str='chillsynth'):
+        self.logger.debug(f'Press play')
         self.media=self.instance.media_new(f'{self.base_url}/{station}.m4a')
         self.player.set_media(self.media)
         self.player.play()
 
     def stop(self):
+        self.logger.debug(f'Press stop')
         self.player.stop()
     
     def get_info(self):
