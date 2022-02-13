@@ -69,6 +69,7 @@ class NightRideAPI:
         self.get_metadata()
 
     def fetch_sse(self, url, headers):
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
         return http.request('GET', url, preload_content=False, headers=headers)
 
