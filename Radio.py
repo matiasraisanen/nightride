@@ -230,6 +230,7 @@ class RadioInterface:
 
         panel = curses.panel.new_panel(self.panwin)
         panel.top()
+        # Update panels will crash on WIN10
         curses.panel.update_panels()
         stdscr.refresh()
         while True:
@@ -313,6 +314,7 @@ class RadioInterface:
 
         panel = curses.panel.new_panel(self.panwin)
         panel.top()
+        # Update panels will crash on WIN10
         curses.panel.update_panels()
         stdscr.refresh()
         while True:
@@ -376,6 +378,7 @@ class RadioInterface:
         
                     panel = curses.panel.new_panel(self.panwin)
                     panel.top()
+                    # Update panels will crash on WIN10
                     curses.panel.update_panels()
                     stdscr.refresh()
                 
