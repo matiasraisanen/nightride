@@ -79,11 +79,6 @@ class RadioInterface:
         curses.wrapper(self.main)
         
         
-            
-    def run(self):
-        self.api.start()
-        # wrapper(self.main)
-        
     def main(self, stdscr):
         # curses.noecho()
         curses.curs_set(0)
@@ -410,8 +405,7 @@ class RadioInterface:
         except:
             self.logger.error(f'Failed to set volume slider to {volume}')
 
-    def shorten(self, word):
-        max_length = 29
+    def shorten(self, word, max_length=29):
         if len(word) > max_length:
             self.logger.debug(f'Truncating {word} for interface')
             trunc_word = list(word[0:max_length])
@@ -502,12 +496,12 @@ class RadioInterface:
         
     def set_station(self, station):
         self.logger.debug(f'Set station => {station}')
-        self.api.audioPlayer.play(station)
         try:
             self.station = station
-            
-        except:
+            self.api.play(station)
+        except Exception as e:
             self.logger.error(f'Failed to set station to {station}')
+            self.logger.error(e)
     
     def draw_vu_meter(self):
         # Obviously, this VU meter is purely cosmetic :-)
@@ -533,7 +527,7 @@ class RadioInterface:
         self.menu_win = curses.newwin(1, max_cols, 0, 0)
         # self.bot_menu_win = curses.newwin(1, max_cols, 12, 0)
         try:
-            self.menu_win.addstr("F1: ABOUT | ←/→: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+            self.menu_win.addstr("F1: ABOUT | F2: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
         except curses.error:
             # Accursed curses raises an error if you write in the last column.
             # We will discard that...
