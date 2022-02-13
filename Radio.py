@@ -100,6 +100,8 @@ class RadioInterface:
         curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_WHITE)
         curses.init_pair(6, curses.COLOR_BLACK, curses.COLOR_MAGENTA)
         curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_RED)
+        curses.init_pair(8, curses.COLOR_BLACK, curses.COLOR_GREEN)
+        curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
         
         
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
@@ -191,6 +193,10 @@ class RadioInterface:
         # Show "About" info
         if key == "KEY_F(1)":
             self.draw_popup_about(stdscr)
+        # Show "Stations" panel
+        if key == "KEY_F(2)":
+            self.draw_popup_select_station(stdscr)
+            
     def draw_popup_about(self, stdscr):
         self.panwin = curses.newwin(9,49, 2,2)
         self.panwin.erase()
@@ -245,7 +251,149 @@ class RadioInterface:
                 if key == "KEY_F(12)":
                     exit()
         
+    def draw_popup_select_station(self, stdscr):
+        
+        # Draw menu with "station" active
+        max_rows, max_cols = stdscr.getmaxyx()
+        menu_win = curses.newwin(1, 12, 0, 0)
+        menu_win_2 = curses.newwin(1, 14, 0, 11)
+        menu_win_3 = curses.newwin(1, max_cols - 25, 0, 24)
+        try:
+            menu_win.addstr("F1: ABOUT |", curses.color_pair(5))
+            menu_win_2.addstr(" F2: STATION ", curses.color_pair(3))
+            menu_win_3.addstr("| ↑/↓: MOVE | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+        except curses.error:
+        # Accursed curses raises an error if you write in the last column.
+        # We will discard that...
+            pass
+        menu_win.refresh()
+        menu_win_2.refresh()
+        menu_win_3.refresh()
+        
+        self.panwin = curses.newwin(9,49, 2,2)
+        self.panwin.erase()
+        self.panwin.box()
+        
+        selected = self.stations.index(self.station)
+        index_of_prev = self.stations.index(self.station) - 1
+        if index_of_prev >= 0:
+            prev_station = self.stations[index_of_prev]
+        else:
+            prev_station = ''
+        
+        index_of_next = self.stations.index(self.station) + 1
+        if index_of_next < len(self.stations):
+            next_station = self.stations[index_of_next]
+        else: next_station = ''
     
+        top = prev_station
+        mid = self.stations[selected]
+        bot = next_station
+        
+        self.panwin.addstr(0, 15, f'>>SELECT STATION<<', curses.color_pair(5))
+        # self.panwin.addstr(2, 6, f'↑', curses.color_pair(5))
+        self.panwin.addstr(3, 3, f'Station {selected+1}:')
+        # self.panwin.addstr(4, 6, f'↓', curses.color_pair(5))
+        
+        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
+        self.panwin.addstr(3, 19, f'→ {mid.center(11)} ←', curses.color_pair(3))
+        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
+        
+        self.panwin.addstr(5, 1, "...............................................")
+        self.panwin.addstr(5, 3, "NOW.PLAYING")
+        
+        artist = self.api.now_playing[self.stations[selected]]['artist']
+        artist = self.shorten(artist,37)
+        song = self.api.now_playing[self.stations[selected]]['song']
+        song = self.shorten(song,37)
+        self.panwin.addstr(6, 2, f'Artist: ')
+        self.panwin.addstr(6, 10, f'{artist}', curses.color_pair(3))
+        self.panwin.addstr(7, 4, f'Song: ')
+        self.panwin.addstr(7, 10, f'{song}', curses.color_pair(4))
+        
+        
+        
+        self.panwin.addstr(8, 3, "ENTER: [OK]", curses.color_pair(8))
+        self.panwin.addstr(8, 31, "F2: [CLOSE]", curses.color_pair(7))
+
+        panel = curses.panel.new_panel(self.panwin)
+        panel.top()
+        curses.panel.update_panels()
+        stdscr.refresh()
+        while True:
+                key = ''
+                try:
+                    key = stdscr.getkey()
+                   
+                    if key == "KEY_UP":
+                        index_of_prev = selected - 1
+                        if index_of_prev >= 0:
+                            if index_of_prev == 0:
+                                top = ''
+                            else:
+                                top = self.stations[selected-2]
+                            mid = self.stations[selected-1]
+                            bot = self.stations[selected]
+                            selected -= 1
+                            if selected > 0:
+                                top = self.stations[selected-1]
+                        else:
+                            top = ''
+                            
+                    if key == "KEY_DOWN":
+                        max_num = (len(self.stations) -1)
+                        index_of_next = selected + 1
+                        if index_of_next <= max_num:
+                            mid = self.stations[selected+1]
+                            top = self.stations[selected]
+                            if index_of_next == max_num :
+                                bot = ''
+                            
+                            selected += 1
+                            if selected < max_num:
+                                bot = self.stations[selected+1]
+                        else:
+                            bot = ''
+                    if key == "KEY_F(2)":
+                        break
+                    if key == "KEY_F(12)":
+                        exit()
+                    
+                    mid = self.stations[selected]
+                    self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
+                    
+                    self.panwin.addstr(3, 3, f'Station {selected+1}:')
+                    self.panwin.addstr(3, 19, f'→ {mid.center(11)} ←', curses.color_pair(3))
+                    
+                    # if bot != '':
+                    self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
+                    
+                    
+                    artist = self.api.now_playing[self.stations[selected]]['artist']
+                    artist = self.shorten(artist,37)
+                    song = self.api.now_playing[self.stations[selected]]['song']
+                    song = self.shorten(song,37)
+                    
+                    self.panwin.addstr(6, 2, f'Artist: {artist.ljust(38)}')
+                    self.panwin.addstr(6, 10, f'{artist}', curses.color_pair(3))
+                    self.panwin.addstr(7, 4, f'Song: {song.ljust(38)}')
+                    self.panwin.addstr(7, 10, f'{song}', curses.color_pair(4))
+        
+                    panel = curses.panel.new_panel(self.panwin)
+                    panel.top()
+                    curses.panel.update_panels()
+                    stdscr.refresh()
+                
+                    # User pressing "ENTER" will select
+                    if key == curses.KEY_ENTER or key == 10 or key == 13 or key == "\n":
+                        self.logger.debug(f'User selected station {self.stations[selected]} via F2')
+                        self.set_station(self.stations[selected])
+                        break
+                
+                except curses.error as e:
+                        # No input from user. Let's pass.
+                        pass
+                    
     def save_config(self):
         with open('Nightride.ini', 'w') as configfile:
             self.config.write(configfile)
