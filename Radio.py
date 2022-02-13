@@ -225,8 +225,8 @@ class RadioInterface:
 
         self.panwin.addstr(6, 2, "Player for Nightride.fm")
         self.panwin.addstr(7, 2, "(https://nightride.fm)")
-        self.panwin.addstr(8, 3, "OK: [ENTER]", curses.color_pair(8))
-        self.panwin.addstr(8, 31, "CLOSE: [F1]", curses.color_pair(7))
+        self.panwin.addstr(8, 3, "ENTER: [OK]", curses.color_pair(8))
+        self.panwin.addstr(8, 31, "F1: [CLOSE]", curses.color_pair(7))
 
         panel = curses.panel.new_panel(self.panwin)
         panel.top()
