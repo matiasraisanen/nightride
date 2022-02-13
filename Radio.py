@@ -75,7 +75,7 @@ class RadioInterface:
             "artist_short": "", 
             "song": "", 
             "song_short": ""}
-        self.version = "v0.1"
+        self.version = "v1.0"
         curses.wrapper(self.main)
         
         
