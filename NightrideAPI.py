@@ -69,7 +69,7 @@ class NightRideAPI:
         self.get_metadata()
 
     def fetch_sse(self, url, headers):
-        http = urllib3.PoolManager()
+        http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
         return http.request('GET', url, preload_content=False, headers=headers)
 
     def init_client(self, sse_url):
