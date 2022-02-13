@@ -190,32 +190,48 @@ class RadioInterface:
         
         # Show "About" info
         if key == "KEY_F(1)":
-            self.panwin = curses.newwin(9,49, 2,2)
-            self.panwin.erase()
-            self.panwin.box()
-            self.panwin.addstr(0, 20, ">>ABOUT<<", curses.color_pair(5))
-            self.panwin.addstr(2, 3, "AUTHOR:", curses.color_pair(3))
-            self.panwin.addstr(2, 10, " Matias Räisänen 2022 ", curses.color_pair(6))
-            
-            self.panwin.addstr(3, 2, "CONTACT:", curses.color_pair(3))
-            self.panwin.addstr(3, 10, " matias@matiasraisanen.com ", curses.color_pair(6))
-            
-            self.panwin.addstr(4, 3, "SOURCE:", curses.color_pair(3))
-            self.panwin.addstr(4, 10, " github.com/matiasraisanen/nightride ", curses.color_pair(6))
-            
-            self.panwin.addstr(5, 2, "VERSION:", curses.color_pair(3))
-            self.panwin.addstr(5, 10, f' {self.version}',  curses.color_pair(6))
+            self.draw_popup_about(stdscr)
+    def draw_popup_about(self, stdscr):
+        self.panwin = curses.newwin(9,49, 2,2)
+        self.panwin.erase()
+        self.panwin.box()
+        
+        max_rows, max_cols = stdscr.getmaxyx()
+        menu_win = curses.newwin(1, 11, 0, 0)
+        menu_win_2 = curses.newwin(1, max_cols - 11, 0, 10)
+        try:
+            menu_win.addstr("F1: ABOUT ", curses.color_pair(3))
+            menu_win_2.addstr("| F2: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
+        except curses.error:
+        # Accursed curses raises an error if you write in the last column.
+        # We will discard that...
+            pass
+        menu_win.refresh()
+        menu_win_2.refresh()
+        
+        self.panwin.addstr(0, 20, ">>ABOUT<<", curses.color_pair(5))
+        self.panwin.addstr(2, 3, "AUTHOR:", curses.color_pair(3))
+        self.panwin.addstr(2, 10, " Matias Räisänen 2022 ", curses.color_pair(6))
+        
+        self.panwin.addstr(3, 2, "CONTACT:", curses.color_pair(3))
+        self.panwin.addstr(3, 10, " matias@matiasraisanen.com ", curses.color_pair(6))
+        
+        self.panwin.addstr(4, 3, "SOURCE:", curses.color_pair(3))
+        self.panwin.addstr(4, 10, " github.com/matiasraisanen/nightride ", curses.color_pair(6))
+        
+        self.panwin.addstr(5, 2, "VERSION:", curses.color_pair(3))
+        self.panwin.addstr(5, 10, f' {self.version}',  curses.color_pair(6))
 
-            self.panwin.addstr(6, 2, "Player for Nightride.fm")
-            self.panwin.addstr(7, 2, "(https://nightride.fm)")
-            self.panwin.addstr(8, 31, "(F1 TO CLOSE)", curses.color_pair(7))
+        self.panwin.addstr(6, 2, "Player for Nightride.fm")
+        self.panwin.addstr(7, 2, "(https://nightride.fm)")
+        self.panwin.addstr(8, 3, "OK: [ENTER]", curses.color_pair(8))
+        self.panwin.addstr(8, 31, "CLOSE: [F1]", curses.color_pair(7))
 
-            panel = curses.panel.new_panel(self.panwin)
-            panel.top()
-            curses.panel.update_panels()
-            stdscr.refresh()
-            
-            while True:
+        panel = curses.panel.new_panel(self.panwin)
+        panel.top()
+        curses.panel.update_panels()
+        stdscr.refresh()
+        while True:
                 key = ''
                 try:
                     key = stdscr.getkey()
@@ -224,7 +240,7 @@ class RadioInterface:
                     # No input from user. Let's pass.
                     pass
                 
-                if key == "KEY_F(1)":
+                if key == "KEY_F(1)" or key == "\n":
                     break
                 if key == "KEY_F(12)":
                     exit()
