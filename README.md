@@ -32,7 +32,7 @@ Controller for optional [Waveshare RGB1602](https://www.waveshare.com/wiki/LCD16
 
 0. Install dependencies:
 
-        pip3 install python-vlc sseclient-py
+        pip3 install python-vlc sseclient-py urllib3
 
 1. Run Radio.py:
 
