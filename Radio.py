@@ -498,7 +498,7 @@ class RadioInterface:
         self.logger.debug(f'Set station => {station}')
         try:
             self.station = station
-            self.api.play(station)
+            self.api.audioPlayer.play(station)
         except Exception as e:
             self.logger.error(f'Failed to set station to {station}')
             self.logger.error(e)
