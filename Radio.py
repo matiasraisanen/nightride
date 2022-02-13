@@ -148,21 +148,22 @@ class RadioInterface:
                 self.set_volume_slider(self.volume)
                 self.api.audioPlayer.set_volume(self.volume)
         
-        # Previous station
-        if key == "KEY_LEFT":
-            self.logger.debug("Previous station")
-            index_of_prev = self.stations.index(self.station) - 1
-            if index_of_prev >= 0:
-                prev_station = self.stations[index_of_prev]
-                self.set_station(prev_station)
+        # Legacy: change station with arrow keys
+        # # Previous station
+        # if key == "KEY_LEFT":
+        #     self.logger.debug("Previous station")
+        #     index_of_prev = self.stations.index(self.station) - 1
+        #     if index_of_prev >= 0:
+        #         prev_station = self.stations[index_of_prev]
+        #         self.set_station(prev_station)
             
-        # Next station
-        if key == "KEY_RIGHT":
-            self.logger.debug("Next station")
-            index_of_next = self.stations.index(self.station) + 1
-            if index_of_next < len(self.stations):
-                next_station = self.stations[index_of_next]
-                self.set_station(next_station)
+        # # Next station
+        # if key == "KEY_RIGHT":
+        #     self.logger.debug("Next station")
+        #     index_of_next = self.stations.index(self.station) + 1
+        #     if index_of_next < len(self.stations):
+        #         next_station = self.stations[index_of_next]
+        #         self.set_station(next_station)
             
         # Resize window
         if key == "KEY_RESIZE":
