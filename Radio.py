@@ -56,7 +56,7 @@ class RadioInterface:
         if self.LCD1602_MODULE:
             self.logger.debug(f'Initializing lcd module')
             import RGB1602
-            self.lcd = RGB1602.RGB1602(16,2, 'error', alertlog='radio.log')
+            self.lcd = RGB1602.RGB1602(16,2, 'error', logfile='radio.log')
         
         self.api = NightRideAPI(loglevel=loglevel, logfile='radio.log')
         
