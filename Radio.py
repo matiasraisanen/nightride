@@ -180,6 +180,14 @@ class RadioInterface:
             self.config.set('SETTINGS', 'VU_METER', f'{self.VU_METER}')
             self.save_config()
         
+        if key == "r":
+            self.LCD1602_MODULE = not self.LCD1602_MODULE
+            self.config.set('ADDONS', 'lcd1602', f'{self.VU_METER}')
+            self.save_config()
+            if not self.LCD1602_MODULE:
+                self.lcd.clear()
+                self.lcd.turnOff()
+        
         # Quit
         if key == "KEY_F(12)":
             exit()
