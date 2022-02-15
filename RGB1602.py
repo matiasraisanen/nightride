@@ -60,7 +60,7 @@ LCD_5x8DOTS = 0x00      # 0000 0000
 
 
 class RGB1602:
-    def __init__(self, col, row, loglevel: str='info', alertlog: str=False):
+    def __init__(self, col, row, loglevel: str='info', logfile: str=False):
         
         ### Logger setup
         if loglevel == 'info':
@@ -73,20 +73,15 @@ class RGB1602:
             raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
-        
-        streamHandler = logging.StreamHandler()
         formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s', datefmt='%H:%M:%S')
-        streamHandler.setFormatter(formatter)
-        
-        self.logger.addHandler(streamHandler)
         
         # Setup warn logging to file
-        if alertlog:
-            fileHandler = logging.FileHandler(alertlog)
+        if logfile:
+            fileHandler = logging.FileHandler(logfile)
             fileHandler.setFormatter(formatter)
             fileHandler.setLevel(logging.WARNING)
             self.logger.addHandler(fileHandler)
-            self.logger.warning(f'Logging warnings to {alertlog}')
+            self.logger.warning(f'Logging warnings to {logfile}')
             
         self.logger.info(f'Logger setup finished for {__name__} module')
         ### Logger setup finished
