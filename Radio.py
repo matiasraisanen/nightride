@@ -324,6 +324,8 @@ class RadioInterface:
         # Update panels will crash on WIN10
         curses.panel.update_panels()
         stdscr.refresh()
+        if self.LCD1602_MODULE:
+            self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
         while True:
                 key = ''
                 try:
@@ -394,7 +396,8 @@ class RadioInterface:
                         self.logger.debug(f'User selected station {self.stations[selected]} via F2')
                         self.set_station(self.stations[selected])
                         break
-                
+                    if self.LCD1602_MODULE:
+                        self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
                 except curses.error as e:
                         # No input from user. Let's pass.
                         pass
@@ -475,7 +478,9 @@ class RadioInterface:
                 self.now_playing['artist_short'] = self.shorten(artist)
                 self.now_playing['song_short'] = self.shorten(song)
                 if self.LCD1602_MODULE:
-                    self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False)
+                    # self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False)
+                    self.lcd.sequentialWrite(f'{artist}: {song}', pauseOnPunct=False, freezeFor=0, turnOffAfter=False)
+                    # self.lcd.setRGB((255,0,255))
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
