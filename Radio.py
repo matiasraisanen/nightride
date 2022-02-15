@@ -85,7 +85,6 @@ class RadioInterface:
         curses.start_color()
         
         stdscr.nodelay(True)
-        curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
         
         curses.init_pair(1, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
         curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)
@@ -98,7 +97,7 @@ class RadioInterface:
         curses.init_pair(8, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
         
-        
+        curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
         stdscr.addstr(2, 15, "FM", curses.color_pair(2))
         stdscr.addstr(4, 3, "...............................................")
