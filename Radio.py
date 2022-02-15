@@ -175,7 +175,7 @@ class RadioInterface:
             stdscr.refresh()
             
         # Disable VU meter
-        if key == "s":
+        if key == "v":
             self.VU_METER = not self.VU_METER
             self.config.set('SETTINGS', 'VU_METER', f'{self.VU_METER}')
             self.save_config()
