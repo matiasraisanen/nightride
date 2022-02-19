@@ -96,6 +96,7 @@ class RadioInterface:
         curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_RED)
         curses.init_pair(8, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
+        curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
         
         curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
@@ -366,13 +367,23 @@ class RadioInterface:
                         exit()
                     
                     mid = self.stations[selected]
-                    self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
+                    # Draw top row
+                    if top == '':
+                        # Draw black on top row, if the selected station is first in list
+                        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(10))
+                    else: 
+                        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
                     
+                    # Draw mid row
                     self.panwin.addstr(3, 3, f'Station {selected+1}:')
                     self.panwin.addstr(3, 19, f'→ {mid.center(11)} ←', curses.color_pair(3))
                     
-                    # if bot != '':
-                    self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
+                    # Draw bot row
+                    if bot == '':
+                        # Draw black on bot row, if the selected station is last in list
+                        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(10))
+                    else:
+                        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
                     
                     
                     artist = self.api.now_playing[self.stations[selected]]['artist']
