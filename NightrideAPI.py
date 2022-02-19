@@ -80,7 +80,9 @@ class NightRideAPI:
         self.client = sseclient.SSEClient(self.response)
 
     def get_metadata(self):
+        self.logger.debug(self.client.events())
         for event in self.client.events():
+            self.logger.debug(f'New event: {event.data}')
             if event.data != "keepalive":
                 data = json.loads(event.data)
                 station = data[0]['station']
