@@ -238,7 +238,7 @@ class RadioInterface:
 
         panel = curses.panel.new_panel(self.panwin)
         panel.top()
-        # Update panels will crash on WIN10
+        # NOTE: Update panels will crash on WIN10. Should figure out a workaround later!
         curses.panel.update_panels()
         stdscr.refresh()
         while True:
@@ -322,17 +322,20 @@ class RadioInterface:
 
         panel = curses.panel.new_panel(self.panwin)
         panel.top()
-        # Update panels will crash on WIN10
+        # NOTE: Update panels will crash on WIN10. Should figure out a workaround later!
         curses.panel.update_panels()
         stdscr.refresh()
         if self.LCD1602_MODULE:
             self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
+        
+        # User changing stations
         while True:
                 key = ''
                 try:
                     key = stdscr.getkey()
                    
                     if key == "KEY_UP":
+                        # Check if top of list.
                         index_of_prev = selected - 1
                         if index_of_prev >= 0:
                             if index_of_prev == 0:
@@ -367,6 +370,9 @@ class RadioInterface:
                         exit()
                     
                     mid = self.stations[selected]
+                    
+                    # Start drawing the channel selector
+                    
                     # Draw top row
                     if top == '':
                         # Draw black on top row, if the selected station is first in list
@@ -386,11 +392,13 @@ class RadioInterface:
                         self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
                     
                     
+                    # Set data for the "NOW PLAYING"-section
                     artist = self.api.now_playing[self.stations[selected]]['artist']
                     artist = self.shorten(artist,37)
                     song = self.api.now_playing[self.stations[selected]]['song']
                     song = self.shorten(song,37)
                     
+                    # Draw the "NOW PLAYING"-section
                     self.panwin.addstr(6, 2, f'Artist: {artist.ljust(38)}')
                     self.panwin.addstr(6, 10, f'{artist}', curses.color_pair(3))
                     self.panwin.addstr(7, 4, f'Song: {song.ljust(38)}')
@@ -398,11 +406,11 @@ class RadioInterface:
         
                     panel = curses.panel.new_panel(self.panwin)
                     panel.top()
-                    # Update panels will crash on WIN10
+                    # NOTE: Update panels will crash on WIN10. Should figure out a workaround later!
                     curses.panel.update_panels()
                     stdscr.refresh()
                 
-                    # User pressing "ENTER" will select
+                    # User pressing "ENTER" will activate the selection
                     if key == curses.KEY_ENTER or key == 10 or key == 13 or key == "\n":
                         self.logger.debug(f'User selected station {self.stations[selected]} via F2')
                         self.set_station(self.stations[selected])
