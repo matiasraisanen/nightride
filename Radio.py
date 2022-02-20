@@ -299,10 +299,26 @@ class RadioInterface:
         self.panwin.addstr(3, 3, f'Station {selected+1}:')
         # self.panwin.addstr(4, 6, f'↓', curses.color_pair(5))
         
-        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
-        self.panwin.addstr(3, 19, f'→ {mid.center(11)} ←', curses.color_pair(3))
-        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
+        # Draw top row
+        if top == '':
+            # Draw black on top row, if the selected station is first in list
+            top_color = curses.color_pair(10)
+        else: 
+            top_color = curses.color_pair(9)
+        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', top_color)
         
+        # Draw mid row
+        self.panwin.addstr(3, 19, f'→ {mid.center(11)} ←', curses.color_pair(3))
+        
+        # Draw bot row
+        if bot == '':
+            # Draw black on bot row, if the selected station is last in list
+            bot_color = curses.color_pair(10)
+        else:
+            bot_color = curses.color_pair(9)
+        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', bot_color)
+        
+        # Draw "NOW PLAYING"-section
         self.panwin.addstr(5, 1, "...............................................")
         self.panwin.addstr(5, 3, "NOW.PLAYING")
         
@@ -376,9 +392,10 @@ class RadioInterface:
                     # Draw top row
                     if top == '':
                         # Draw black on top row, if the selected station is first in list
-                        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(10))
+                        top_color = curses.color_pair(10)
                     else: 
-                        self.panwin.addstr(2, 18, f'  {top.center(11)}  ', curses.color_pair(9))
+                        top_color = curses.color_pair(9)
+                    self.panwin.addstr(2, 18, f'  {top.center(11)}  ', top_color)
                     
                     # Draw mid row
                     self.panwin.addstr(3, 3, f'Station {selected+1}:')
@@ -387,9 +404,10 @@ class RadioInterface:
                     # Draw bot row
                     if bot == '':
                         # Draw black on bot row, if the selected station is last in list
-                        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(10))
+                        bot_color = curses.color_pair(10)
                     else:
-                        self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', curses.color_pair(9))
+                        bot_color = curses.color_pair(9)
+                    self.panwin.addstr(4, 18, f'  {bot.center(11)}  ', bot_color)
                     
                     
                     # Set data for the "NOW PLAYING"-section
