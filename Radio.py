@@ -191,6 +191,9 @@ class RadioInterface:
         
         # Quit
         if key == "KEY_F(12)":
+            if self.LCD1602_MODULE:
+                self.lcd.clear()
+                self.lcd.turnOff()
             exit()
         
         # Show "About" info
