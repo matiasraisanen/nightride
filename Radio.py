@@ -98,7 +98,16 @@ class RadioInterface:
         curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
         
-        curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
+        # Draw a rectangle with single line
+        # curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
+        
+        # Draw a double line thick rectangle
+        stdscr.addstr(2, 2, "╔═ --------- -- ════════════════════════════════╗")
+        for i in range(7):
+            stdscr.addstr(i+3, 2, f'║{str().center(47)}║')
+        stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
+        
+        # Draw the rest of the interface
         stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
         stdscr.addstr(2, 15, "FM", curses.color_pair(2))
         stdscr.addstr(4, 3, "...............................................")
@@ -520,7 +529,7 @@ class RadioInterface:
                 if self.LCD1602_MODULE:
                     self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False, freezeFor=0)
                     # self.lcd.sequentialWrite(f'{artist}: {song}', pauseOnPunct=False, freezeFor=0, turnOffAfter=False)
-                    # self.lcd.setRGB((255,0,255))
+                    self.lcd.setRGB((255,0,255))
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
