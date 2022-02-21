@@ -518,8 +518,8 @@ class RadioInterface:
                 self.now_playing['artist_short'] = self.shorten(artist)
                 self.now_playing['song_short'] = self.shorten(song)
                 if self.LCD1602_MODULE:
-                    # self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False)
-                    self.lcd.sequentialWrite(f'{artist}: {song}', pauseOnPunct=False, freezeFor=0, turnOffAfter=False)
+                    self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False, freezeFor=0)
+                    # self.lcd.sequentialWrite(f'{artist}: {song}', pauseOnPunct=False, freezeFor=0, turnOffAfter=False)
                     # self.lcd.setRGB((255,0,255))
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
