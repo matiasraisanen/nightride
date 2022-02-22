@@ -355,6 +355,7 @@ class RadioInterface:
         stdscr.refresh()
         if self.LCD1602_MODULE:
             self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
+            self.lcd.setRGB((255,0,255))
         
         # User changing stations
         while True:
@@ -393,6 +394,7 @@ class RadioInterface:
                         else:
                             bot = ''
                     if key == "KEY_F(2)":
+                        self.set_now_playing(redraw = True)
                         break
                     if key == "KEY_F(12)":
                         exit()
@@ -445,8 +447,10 @@ class RadioInterface:
                         self.logger.debug(f'User selected station {self.stations[selected]} via F2')
                         self.set_station(self.stations[selected])
                         break
+                    
                     if self.LCD1602_MODULE:
                         self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
+                        self.lcd.setRGB((255,0,255))
                 except curses.error as e:
                         # No input from user. Let's pass.
                         pass
@@ -515,9 +519,11 @@ class RadioInterface:
             self.vol_win.refresh()
         except:
             self.logger.error(f'Failed to draw volume window')
-    def set_now_playing(self):
+
+    def set_now_playing(self, redraw = False):
         try:
-            if self.now_playing == self.api.now_playing[self.station]:
+            # Force LCD redraw with redraw = True
+            if self.now_playing == self.api.now_playing[self.station] and redraw == False:
                 # Already playing the song, do nothing.
                 pass
             else:
