@@ -21,7 +21,7 @@ Text interface for radio. Handles user input and communicates that to the API.
 Handles audio player functionality using VLC
 
 
-[Nightride.ini](./Nightride.ini)  
+[settings.ini](./settings.ini)  
 Various settings for the player
 
 

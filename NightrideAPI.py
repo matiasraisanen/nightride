@@ -14,7 +14,7 @@ class NightRideAPI:
     def __init__(self, loglevel: str='error', logfile: str='radio.log'):
         ### Read config ###
         config = configparser.ConfigParser()
-        config.read('Nightride.ini')
+        config.read('settings.ini')
         
         ### Logger setup ###
         if loglevel == 'info':

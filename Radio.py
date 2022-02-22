@@ -456,7 +456,7 @@ class RadioInterface:
                         pass
                     
     def save_config(self):
-        with open('Nightride.ini', 'w') as configfile:
+        with open('settings.ini', 'w') as configfile:
             self.config.write(configfile)
             
     def set_volume_slider(self, volume):
