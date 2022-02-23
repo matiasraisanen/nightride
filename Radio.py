@@ -50,7 +50,7 @@ class RadioInterface:
         
         ### Read config ###
         self.config = configparser.ConfigParser()
-        self.config.read('Nightride.ini')
+        self.config.read('settings.ini')
         
         self.LCD1602_MODULE = self.config.getboolean('ADDONS', 'LCD1602')
         if self.LCD1602_MODULE:
