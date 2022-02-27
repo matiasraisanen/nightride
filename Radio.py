@@ -199,7 +199,9 @@ class RadioInterface:
             if not self.LCD1602_MODULE:
                 self.lcd.clear()
                 self.lcd.turnOff()
-        
+            else: 
+                self.lcd.printOnTwoRows(argTopRow=self.now_playing['artist'],argBotRow=self.now_playing['song'], color='GREEN', turnOffAfter=False, freezeFor=0)
+                self.lcd.setRGB((255,0,255))
         # Quit
         if key == "KEY_F(12)":
             if self.LCD1602_MODULE:
