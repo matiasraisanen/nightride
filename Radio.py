@@ -98,19 +98,7 @@ class RadioInterface:
         curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
         
-        # Draw a rectangle with single line
-        # curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
-        
-        # Draw a double line thick rectangle
-        stdscr.addstr(2, 2, "╔═ --------- -- ════════════════════════════════╗")
-        for i in range(7):
-            stdscr.addstr(i+3, 2, f'║{str().center(47)}║')
-        stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
-        
-        # Draw the rest of the interface
-        stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
-        stdscr.addstr(2, 15, "FM", curses.color_pair(2))
-        stdscr.addstr(4, 3, "...............................................")
+        self.draw_radio_frame(stdscr)
         self.draw_now_playing_win()
         
         self.set_station(self.station)
@@ -126,7 +114,21 @@ class RadioInterface:
             self.draw_volume_win()
             stdscr.refresh()
             time.sleep(.1)
-    
+    def draw_radio_frame(self,stdscr):
+        # Draw a rectangle with single line
+        # curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
+        
+        # Draw a double line thick rectangle
+        stdscr.addstr(2, 2, "╔═ --------- -- ════════════════════════════════╗")
+        for i in range(7):
+            stdscr.addstr(i+3, 2, f'║{str().center(47)}║')
+        stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
+        
+        # Draw the rest of the interface
+        stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
+        stdscr.addstr(2, 15, "FM", curses.color_pair(2))
+        stdscr.addstr(4, 3, "...............................................")
+        
     def read_key(self, stdscr):
         key = ''
         try:
@@ -263,6 +265,7 @@ class RadioInterface:
                     pass
                 
                 if key == "KEY_F(1)" or key == "\n":
+                    self.draw_radio_frame(stdscr)
                     break
                 if key == "KEY_F(12)":
                     exit()
@@ -394,6 +397,7 @@ class RadioInterface:
                         else:
                             bot = ''
                     if key == "KEY_F(2)":
+                        self.draw_radio_frame(stdscr)
                         self.set_now_playing(redraw = True)
                         break
                     if key == "KEY_F(12)":
