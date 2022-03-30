@@ -139,7 +139,7 @@ class RadioInterface:
             pass
         
         # Change channels inputting numbers
-        if key in ["1", "2", "3", "4", "5", "6", "7", "8"]:
+        if key in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
             self.set_station(self.stations[int(key)-1])
         
         # Volume up
