@@ -44,7 +44,8 @@ Developed to work on Linux. I might add support for different operating systems 
 
 Press **F1** to pop up a little info screen.
 
-Press **F2** to open station selector. Use arrow keys **UP** and **DOWN** to choose station, and press **ENTER** to select.
+Press **F2** to open station selector.  
+Use arrow keys **UP** and **DOWN** to choose station, and press **ENTER** to select.  
 Stations can also be changed using numbers **1** through **9** on the main screen.
 
 Press **PLUS** or **MINUS** to change volume.
