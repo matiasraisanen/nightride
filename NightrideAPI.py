@@ -84,32 +84,35 @@ class NightRideAPI:
         for event in self.client.events():
             self.logger.debug(f'New event: {event.data}')
             if event.data != "keepalive":
-                data = json.loads(event.data)
-                station = data[0]['station']
-                start_time = time.perf_counter()
-                # start_time is used to estimate song lengths on the interface
-                if 'rekt' in data[0]['station']:
-                    # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
-                    # These stations have to be handled in a different manner.
-                    pattern = '(.+)\s-\s(.+)'
-                    match = re.search(pattern, data[0]['title'])
-                    if match:
-                        artist = match.group(1)
-                        title = match.group(2)
+                try:
+                    data = json.loads(event.data)
+                    station = data[0]['station']
+                    start_time = time.perf_counter()
+                    # start_time is used to estimate song lengths on the interface
+                    if 'rekt' in data[0]['station']:
+                        # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
+                        # These stations have to be handled in a different manner.
+                        pattern = '(.+)\s-\s(.+)'
+                        match = re.search(pattern, data[0]['title'])
+                        if match:
+                            artist = match.group(1)
+                            title = match.group(2)
+                        else:
+                            artist = ""
+                            title = data[0]['title']
                     else:
-                        artist = ""
+                        artist = data[0]['artist']
                         title = data[0]['title']
-                else:
-                    artist = data[0]['artist']
-                    title = data[0]['title']
-                    
-                current = {
-                    "artist": artist,
-                    "song": title,
-                    "started_at": start_time
-                }
-                self.now_playing[station] = current
-                self.logger.debug(f'New song on {station} => {artist} - {title}')
+                        
+                    current = {
+                        "artist": artist,
+                        "song": title,
+                        "started_at": start_time
+                    }
+                    self.now_playing[station] = current
+                    self.logger.debug(f'New song on {station} => {artist} - {title}')
+                except Exception as e:
+                    self.logger.error(e)
 
 if __name__ == '__main__':
     nightRide = NightRideAPI(loglevel='debug')
