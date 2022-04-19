@@ -140,6 +140,7 @@ class RadioInterface:
         
         # Change channels inputting numbers
         if key in ["1", "2", "3", "4", "5", "6", "7", "8", "9"]:
+            self.api.audioPlayer.stop()
             self.set_station(self.stations[int(key)-1])
         
         # Volume up
@@ -618,7 +619,7 @@ class RadioInterface:
         # self.bot_menu_win.refresh()
 if __name__ == '__main__':
     
-    radio = RadioInterface(loglevel='info')
+    radio = RadioInterface(loglevel='debug')
     
     if radio.LCD1602_MODULE:
             radio.lcd.clear()
