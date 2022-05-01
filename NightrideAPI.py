@@ -71,13 +71,19 @@ class NightRideAPI:
     def fetch_sse(self, url, headers):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
-        return http.request('GET', url, preload_content=False, headers=headers)
+        try:
+            return http.request('GET', url, preload_content=False, headers=headers)
+        except Exception as e:
+            self.logger.error(e)
 
     def init_client(self, sse_url):
         self.logger.debug(f'Start SSE client')
         headers = {'Accept': 'text/event-stream'}
-        self.response = self.fetch_sse(sse_url, headers)
-        self.client = sseclient.SSEClient(self.response)
+        try:
+            self.response = self.fetch_sse(sse_url, headers)
+            self.client = sseclient.SSEClient(self.response)
+        except Exception as e:
+            self.logger.error(e)
 
     def get_metadata(self):
         self.logger.debug(self.client.events())
