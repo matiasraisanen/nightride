@@ -136,7 +136,10 @@ class RadioInterface:
         key = ''
         try:
             key = stdscr.getkey()
-            self.logger.debug(f'User pressed key {key}')
+            if key == "KEY_RESIZE":
+                self.logger.debug(f'User resized the window')
+            else:
+                self.logger.debug(f'User pressed key {key}')
         except curses.error as e:
             # No input from user. Let's pass.
             pass
