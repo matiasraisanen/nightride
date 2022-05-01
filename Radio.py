@@ -76,7 +76,10 @@ class RadioInterface:
             "song": "", 
             "song_short": ""}
         self.version = "v1.0"
-        curses.wrapper(self.main)
+        try:
+            curses.wrapper(self.main)
+        except Exception as e:
+            self.logger.error(e)
         
         
     def main(self, stdscr):
