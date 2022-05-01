@@ -101,6 +101,11 @@ class RadioInterface:
         curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_BLUE)
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
         
+        rows, cols = stdscr.getmaxyx()
+        self.logger.debug(f'Window size at x:{rows} y:{cols}')
+        if rows<52 or cols<11:
+            self.logger.error(f'Window size too small to draw interface!')
+        
         self.draw_radio_frame(stdscr)
         self.draw_now_playing_win()
         
@@ -137,7 +142,9 @@ class RadioInterface:
         try:
             key = stdscr.getkey()
             if key == "KEY_RESIZE":
-                self.logger.debug(f'User resized the window')
+                rows, cols = stdscr.getmaxyx()
+                self.logger.debug(f'User resized the window to x:{cols} y:{rows}')
+                self.draw_radio_frame(stdscr)
             else:
                 self.logger.debug(f'User pressed key {key}')
         except curses.error as e:
