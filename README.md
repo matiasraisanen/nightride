@@ -1,11 +1,10 @@
 # Nightride FM player
 Text-based player for [Nightride FM](https://nightride.fm/) synthwave radio.
 
-![](./images/player.gif)
+![](./images/player.gif)  
+In this screenshot I am running the player on [cool-retro-term](https://github.com/Swordfish90/cool-retro-term) to give it a bit more retro flavour.  
+The player should work on the terminal emulator of your choice however, even on Windows!
 
-The font used is determined by the terminal emulator you are using. The font in screenshot is [VCR OSD Mono](https://www.dafont.com/vcr-osd-mono.font).
-
-The color scheme can also be affected by your terminal settings.
 
 ## Code
 
