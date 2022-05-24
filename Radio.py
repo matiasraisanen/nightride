@@ -79,6 +79,7 @@ class RadioInterface:
         try:
             curses.wrapper(self.main)
         except Exception as e:
+            print("An error caused the program to crash. See radio.log for details")
             self.logger.error(e)
         
         
@@ -631,6 +632,7 @@ class RadioInterface:
 if __name__ == '__main__':
     
     radio = RadioInterface(loglevel='debug')
+    
     
     if radio.LCD1602_MODULE:
             radio.lcd.clear()
