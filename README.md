@@ -33,6 +33,7 @@ Developed to work on Linux. I might add support for different operating systems 
 0. Install dependencies:
 
         sudo apt update && sudo apt install vlc
+        
         pip3 install python-vlc sseclient-py urllib3
 
 1. Run Radio.py:
