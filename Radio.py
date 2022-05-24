@@ -13,10 +13,10 @@ from NightrideAPI import NightRideAPI
 class RadioInterface:
     def __init__(self, loglevel: str='error', logfile: str='radio.log'):
         ### ArgParse ###
-        parser = argparse.ArgumentParser(description='Text-based user interface for Nightride.fm.')
+        # parser = argparse.ArgumentParser(description='Text-based user interface for Nightride.fm.')
 
-        args = parser.parse_args()
-        parser.print_usage()
+        # args = parser.parse_args()
+        # parser.print_usage()
 
         ### Logger setup ###
         
