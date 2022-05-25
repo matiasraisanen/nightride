@@ -87,6 +87,7 @@ class NightRideAPI:
 
     def keep_sse_client_alive(self):
         self.logger.error("Keepalive event not received in time. Restarting sse client.")
+        self.client.close()
         self.init_client(self.SSE_URL)
 
     def get_metadata(self):
