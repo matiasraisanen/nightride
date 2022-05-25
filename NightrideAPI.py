@@ -39,7 +39,7 @@ class NightRideAPI:
         self.logger.debug(f'Logger setup finished for {__name__} module')
         ### Logger setup finished ###
         
-        SSE_URL = config['URLS']['sse_url']
+        self.SSE_URL = config['URLS']['sse_url']
         AUDIO_STREAM_BASE_URL = config['URLS']['audio_stream_base_url']
         
         stationlist = config.items('STATIONS')
@@ -48,7 +48,7 @@ class NightRideAPI:
             self.stations.append(value)
         
         # Initialize SSE client
-        self.init_client(SSE_URL)
+        self.init_client(self.SSE_URL)
         
         # Initialize audio player
         self.audioPlayer = AudioPlayer(base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel)
@@ -85,38 +85,53 @@ class NightRideAPI:
         except Exception as e:
             self.logger.error(e)
 
+    def keep_sse_client_alive(self):
+        self.logger.error("Keepalive event not received in time. Restarting sse client.")
+        self.init_client(self.SSE_URL)
+
     def get_metadata(self):
-        self.logger.debug(self.client.events())
+        
         try:
+            # Start a timer to keep SSE connection alive
+            keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
+
             for event in self.client.events():
                 self.logger.debug(f'New event: {event.data}')
                 if event.data != "keepalive":
-                        data = json.loads(event.data)
-                        station = data[0]['station']
-                        start_time = time.perf_counter()
-                        # start_time is used to estimate song lengths on the interface
-                        if 'rekt' in data[0]['station']:
-                            # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
-                            # These stations have to be handled in a different manner.
-                            pattern = '(.+)\s-\s(.+)'
-                            match = re.search(pattern, data[0]['title'])
-                            if match:
-                                artist = match.group(1)
-                                title = match.group(2)
-                            else:
-                                artist = ""
-                                title = data[0]['title']
+                    data = json.loads(event.data)
+                    station = data[0]['station']
+                    start_time = time.perf_counter()
+                    # start_time is used to estimate song lengths on the interface
+                    if 'rekt' in data[0]['station']:
+                        # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
+                        # These stations have to be handled in a different manner.
+                        pattern = '(.+)\s-\s(.+)'
+                        match = re.search(pattern, data[0]['title'])
+                        if match:
+                            artist = match.group(1)
+                            title = match.group(2)
                         else:
-                            artist = data[0]['artist']
+                            artist = ""
                             title = data[0]['title']
-                            
-                        current = {
-                            "artist": artist,
-                            "song": title,
-                            "started_at": start_time
-                        }
-                        self.now_playing[station] = current
-                        self.logger.debug(f'New song on {station} => {artist} - {title}')
+                    else:
+                        artist = data[0]['artist']
+                        title = data[0]['title']
+                        
+                    current = {
+                        "artist": artist,
+                        "song": title,
+                        "started_at": start_time
+                    }
+                    self.now_playing[station] = current
+                    self.logger.debug(f'New song on {station} => {artist} - {title}')
+
+                elif event.data == "keepalive":
+                    # Keepalive events should be received every 60 seconds.
+                    # We allow 90 seconds after which we assume the connection has been dropped, and we need to restart it.
+                    keep_alive_timer.cancel()
+                    keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
+                    keep_alive_timer.start()
+            self.logger.error("SSE client connection dropped")
         except Exception as e:
             self.logger.error(e)
 
