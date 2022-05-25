@@ -103,9 +103,9 @@ class RadioInterface:
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
         
         rows, cols = stdscr.getmaxyx()
-        self.logger.debug(f'Window size at x:{rows} y:{cols}')
-        if rows<52 or cols<11:
-            self.logger.error(f'Window size too small to draw interface!')
+        self.logger.debug(f'Window size at x:{cols} y:{rows}')
+        if rows<11 or cols<52:
+            self.logger.error(f'Window size too small to draw interface! Needs at least 52x11')
         
         self.draw_radio_frame(stdscr)
         self.draw_now_playing_win()
