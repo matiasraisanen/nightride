@@ -138,10 +138,7 @@ class NightRideAPI:
                     keep_alive_timer.cancel()
                     keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
                     keep_alive_timer.start()
-        except ProtocolError as protocol_error:
-            self.logger.error("Protocol error!")
-            self.logger.error(protocol_error)
-
+                    
         except Exception as e:
             self.logger.error("get_metadata error")
             self.logger.error(e)
