@@ -74,6 +74,7 @@ class NightRideAPI:
         try:
             return http.request('GET', url, preload_content=False, headers=headers)
         except Exception as e:
+            self.logger.error("fetch_sse error")
             self.logger.error(e)
 
     def init_client(self, sse_url):
@@ -83,12 +84,17 @@ class NightRideAPI:
             self.response = self.fetch_sse(sse_url, headers)
             self.client = sseclient.SSEClient(self.response)
         except Exception as e:
+            self.logger.error("init_client error")
             self.logger.error(e)
 
     def keep_sse_client_alive(self):
         self.logger.error("Keepalive event not received in time. Restarting sse client.")
         self.client.close()
         self.init_client(self.SSE_URL)
+
+        metadata_handler_thread = threading.Thread(target=self.start)
+        metadata_handler_thread.daemon = True
+        metadata_handler_thread.start()
 
     def get_metadata(self):
         
@@ -132,8 +138,12 @@ class NightRideAPI:
                     keep_alive_timer.cancel()
                     keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
                     keep_alive_timer.start()
-            self.logger.error("SSE client connection dropped")
+        except ProtocolError as protocol_error:
+            self.logger.error("Protocol error!")
+            self.logger.error(protocol_error)
+
         except Exception as e:
+            self.logger.error("get_metadata error")
             self.logger.error(e)
 
 if __name__ == '__main__':
