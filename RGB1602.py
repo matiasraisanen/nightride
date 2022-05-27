@@ -97,7 +97,8 @@ class RGB1602:
           'WHITE' : (248,248,60),
           'YELLOW_GREEN' : (144,249,15),
           'MAX_WHITE': (255,255,255),
-          'SCREEN_OFF': (0,0,0)
+          'SCREEN_OFF': (0,0,0),
+          'PURPLE': (255,0,255)
         }
         self.begin(self._row, self._col)
 
