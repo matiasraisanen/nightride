@@ -213,8 +213,7 @@ class RadioInterface:
                 self.lcd.clear()
                 self.lcd.turnOff()
             else: 
-                self.lcd.printOnTwoRows(argTopRow=self.now_playing['artist'],argBotRow=self.now_playing['song'], color='GREEN', turnOffAfter=False, freezeFor=0)
-                self.lcd.setRGB((255,0,255))
+                self.lcd.printOnTwoRows(argTopRow=self.now_playing['artist'],argBotRow=self.now_playing['song'], color='PUPRLE', turnOffAfter=False, freezeFor=0)
         # Quit
         if key == "KEY_F(12)":
             if self.LCD1602_MODULE:
@@ -553,9 +552,7 @@ class RadioInterface:
                 self.now_playing['artist_short'] = self.shorten(artist)
                 self.now_playing['song_short'] = self.shorten(song)
                 if self.LCD1602_MODULE:
-                    self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='GREEN', turnOffAfter=False, freezeFor=0)
-                    # self.lcd.sequentialWrite(f'{artist}: {song}', pauseOnPunct=False, freezeFor=0, turnOffAfter=False)
-                    self.lcd.setRGB((255,0,255))
+                    self.lcd.printOnTwoRows(argTopRow=artist,argBotRow=song, color='PURPLE', turnOffAfter=False, freezeFor=0)
         except KeyError as e:
             self.logger.warning(f'No data for station {self.station} yet')
         except Exception as e:
@@ -574,7 +571,6 @@ class RadioInterface:
         
         time_to_print = f'Played: {str(minutes).zfill(2)}:{str(seconds).zfill(2)}'
 
-        # if time_to_print != self.orig_time:
         try:
             time_played_win = curses.newwin(1, 20, 8, 5)
             time_played_win.addstr(time_to_print)
@@ -615,21 +611,13 @@ class RadioInterface:
     def draw_menu_bar(self, stdscr):
         max_rows, max_cols = stdscr.getmaxyx()
         self.menu_win = curses.newwin(1, max_cols, 0, 0)
-        # self.bot_menu_win = curses.newwin(1, max_cols, 12, 0)
         try:
             self.menu_win.addstr("F1: ABOUT | F2: STATION | -/+: VOLUME | F12: QUIT".ljust(max_cols), curses.color_pair(5))
         except curses.error:
             # Accursed curses raises an error if you write in the last column.
             # We will discard that...
             pass
-        # try:
-        #     pattern = list("░▒▓█▓▒░"*20)
-        #     self.bot_menu_win.addstr("".join(pattern[0:max_cols]), curses.color_pair(2))
-        #     # self.bot_menu_win.addstr("asdf", curses.color_pair(3))
-        # except curses.error:
-        #     pass
         self.menu_win.refresh()
-        # self.bot_menu_win.refresh()
 if __name__ == '__main__':
     
     radio = RadioInterface(loglevel='debug')
