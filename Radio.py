@@ -372,12 +372,14 @@ class RadioInterface:
         curses.panel.update_panels()
         stdscr.refresh()
         if self.LCD1602_MODULE:
-            self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
-            self.lcd.setRGB((255,0,255))
-        
+            self.lcd.printOnOneRow(arg=f'Select station: ', row=0)
+            self.lcd.printOnOneRow(arg=f'{mid}'.center(16), row=1)
+
         # User changing stations
         while True:
                 key = ''
+                if self.LCD1602_MODULE:
+                    self.lcd.printOnOneRow(arg='Select station:', row=0)
                 try:
                     key = stdscr.getkey()
                    
@@ -468,8 +470,7 @@ class RadioInterface:
                         break
                     
                     if self.LCD1602_MODULE:
-                        self.lcd.printOnTwoRows(argTopRow='Select station:',argBotRow=f'{mid}'.center(16), color='GREEN', turnOffAfter=False, freezeFor=0)
-                        self.lcd.setRGB((255,0,255))
+                        self.lcd.printOnOneRow(arg=f'{mid}'.center(16), row=1)
                 except curses.error as e:
                         # No input from user. Let's pass.
                         pass
