@@ -134,7 +134,7 @@ class RadioInterface:
         stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
         
         # Draw the rest of the interface
-        stdscr.addstr(2, 5, "NIGHTRIDE", curses.color_pair(2))
+        stdscr.addstr(2, 5, "NIGHTRIDE.", curses.color_pair(2))
         stdscr.addstr(2, 15, "FM", curses.color_pair(2))
         stdscr.addstr(4, 3, "...............................................")
         
