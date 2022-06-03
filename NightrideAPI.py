@@ -97,13 +97,13 @@ class NightRideAPI:
         metadata_handler_thread.start()
 
     def get_metadata(self):
-        
+        countdown_seconds = 90
         try:
             # Start a timer to keep SSE connection alive
-            keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
+            keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
 
             for event in self.client.events():
-                self.logger.debug(f'New event: {event.data}')
+                self.logger.debug(f'SSE event received: {event.data}')
                 if event.data != "keepalive":
                     data = json.loads(event.data)
                     station = data[0]['station']
@@ -130,13 +130,14 @@ class NightRideAPI:
                         "started_at": start_time
                     }
                     self.now_playing[station] = current
-                    self.logger.debug(f'New song on {station} => {artist} - {title}')
+                    self.logger.debug(f'New song detected on {station} => {artist} - {title}')
 
                 elif event.data == "keepalive":
-                    # Keepalive events should be received every 60 seconds.
-                    # We allow 90 seconds after which we assume the connection has been dropped, and we need to restart it.
+                    # Keepalive events should be received every {countdown_seconds}.
+                    # We wait for {countdown_seconds} to pass, after which we assume the connection has been dropped, and we need to restart it.
+                    self.logger.debug(f'Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer')
                     keep_alive_timer.cancel()
-                    keep_alive_timer = threading.Timer(90.0, self.keep_sse_client_alive)  
+                    keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
                     keep_alive_timer.start()
                     
         except Exception as e:
