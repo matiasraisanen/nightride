@@ -492,11 +492,11 @@ class RadioInterface:
 
     def shorten(self, word, max_length=29):
         if len(word) > max_length:
-            self.logger.debug(f'Truncating {word} for interface')
+            self.logger.debug(f'Truncating "{word}" for interface')
             trunc_word = list(word[0:max_length])
             trunc_word[-3:] = "..."
             word = "".join(trunc_word)
-            self.logger.debug(f'Truncated into {word}')
+            self.logger.debug(f'Truncated into "{word}"')
         return word
     
     def draw_now_playing_win(self):
