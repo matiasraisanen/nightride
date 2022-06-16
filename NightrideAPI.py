@@ -98,14 +98,27 @@ class NightRideAPI:
 
     def get_metadata(self):
         countdown_seconds = 90
+        # We could use a while true -loop here to ensure the event listener is restarted in case of an error.
+        # while True:
         try:
             # Start a timer to keep SSE connection alive
             keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
 
             for event in self.client.events():
                 self.logger.debug(f'SSE event received: {event.data}')
-                if event.data != "keepalive":
+                
+                if event.data == "keepalive":
+                    # Keepalive events should be received every {countdown_seconds}.
+                    # We wait for {countdown_seconds} to pass, after which we assume the connection has been dropped, and we need to restart it.
+                    self.logger.debug(f'Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer')
+                    keep_alive_timer.cancel()
+                    keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
+                    keep_alive_timer.start()
+
+                elif event.data != "keepalive":
                     data = json.loads(event.data)
+                    # The event can also be empty
+                    # Need a fix for the case when station (or any other value) is undefined.
                     station = data[0]['station']
                     start_time = time.perf_counter()
                     # start_time is used to estimate song lengths on the interface
@@ -132,13 +145,6 @@ class NightRideAPI:
                     self.now_playing[station] = current
                     self.logger.debug(f'New song detected on {station} => {artist} - {title}')
 
-                elif event.data == "keepalive":
-                    # Keepalive events should be received every {countdown_seconds}.
-                    # We wait for {countdown_seconds} to pass, after which we assume the connection has been dropped, and we need to restart it.
-                    self.logger.debug(f'Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer')
-                    keep_alive_timer.cancel()
-                    keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
-                    keep_alive_timer.start()
                     
         except Exception as e:
             self.logger.error("get_metadata error")
