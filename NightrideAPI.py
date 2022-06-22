@@ -125,8 +125,10 @@ class NightRideAPI:
                     if 'station' in data[0]:
                         station = data[0]['station']
                     station = data[0]['station']
+
+                    # start_time is used to *estimate* play time on the interface
                     start_time = time.perf_counter()
-                    # start_time is used to estimate song lengths on the interface
+
                     if 'rekt' in data[0]['station']:
                         # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
                         # These stations have to be handled in a different manner.
@@ -150,7 +152,7 @@ class NightRideAPI:
                         "started_at": start_time
                     }
                     self.now_playing[station] = current
-                    self.logger.debug(f'New song detected on {station} => {artist} - {title}')
+                    self.logger.debug(f'New song detected on {station}: {artist} - {title}')
 
                     
         except Exception as e:
