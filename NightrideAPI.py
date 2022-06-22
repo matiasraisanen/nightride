@@ -116,9 +116,14 @@ class NightRideAPI:
                     keep_alive_timer.start()
 
                 elif event.data != "keepalive":
+                    # Event can contain undefined values. Thus we need to initiate them as empty strings.
+                    artist = ''
+                    title = ''
+                    station = ''
+
                     data = json.loads(event.data)
-                    # The event can also be empty
-                    # Need a fix for the case when station (or any other value) is undefined.
+                    if 'station' in data[0]:
+                        station = data[0]['station']
                     station = data[0]['station']
                     start_time = time.perf_counter()
                     # start_time is used to estimate song lengths on the interface
@@ -131,11 +136,13 @@ class NightRideAPI:
                             artist = match.group(1)
                             title = match.group(2)
                         else:
-                            artist = ""
-                            title = data[0]['title']
+                            if 'title' in data[0]:
+                                title = data[0]['title']
                     else:
-                        artist = data[0]['artist']
-                        title = data[0]['title']
+                        if 'artist' in data[0]:
+                            artist = data[0]['artist']
+                        if 'title' in data[0]:
+                            title = data[0]['title']
                         
                     current = {
                         "artist": artist,
