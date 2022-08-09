@@ -39,6 +39,7 @@ class AudioPlayer:
         self.logger.debug(f'Press play')
         try:
             self.media=self.instance.media_new(f'{self.base_url}/{station}.m4a')
+            self.logger.debug(f'Playing url {self.base_url}/{station}.m4a')
             self.player.set_media(self.media)
             self.player.play()
         except Exception as e:
