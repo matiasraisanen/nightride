@@ -6,6 +6,7 @@ import sseclient
 import urllib3
 import time
 import threading
+from logger import Logger
 
 from AudioPlayer import AudioPlayer
 
@@ -16,31 +17,14 @@ class NightRideAPI:
         config = configparser.ConfigParser()
         config.read("settings.ini")
 
-        ### Logger setup ###
-        if loglevel == "info":
-            loglevel = logging.INFO
-        elif loglevel == "debug":
-            loglevel = logging.DEBUG
-        elif loglevel == "error":
-            loglevel = logging.ERROR
-        # else:
-        #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(loglevel)
-
-        formatter = logging.Formatter(
-            fmt="[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s",
-            datefmt="%H:%M:%S",
+        self.logger = Logger(
+            module_name=__name__,
+            log_file=logfile,
+            log_level=loglevel,
+            delete_old_logfile=True,
+            streamhandler=True,
+            filehandler=True,
         )
-
-        fileHandler = logging.FileHandler(logfile)
-        fileHandler.setFormatter(formatter)
-        fileHandler.setLevel(loglevel)
-        self.logger.addHandler(fileHandler)
-        self.logger.info(f"Logging to {logfile}")
-
-        self.logger.debug(f"Logger setup finished for {__name__} module")
-        ### Logger setup finished ###
 
         self.SSE_URL = config["URLS"]["sse_url"]
         AUDIO_STREAM_BASE_URL = config["URLS"]["audio_stream_base_url"]

@@ -1,10 +1,9 @@
-import argparse
 import configparser
 import curses
 import curses.panel
 import curses.textpad
 import logging
-import os
+from logger import Logger
 import random
 import time
 
@@ -19,38 +18,14 @@ class RadioInterface:
         # args = parser.parse_args()
         # parser.print_usage()
 
-        ### Logger setup ###
-
-        # Delete old logfile if it exists
-        if os.path.exists(logfile):
-            os.remove(logfile)
-        else:
-            pass
-
-        if loglevel == "info":
-            loglevel = logging.INFO
-        elif loglevel == "debug":
-            loglevel = logging.DEBUG
-        elif loglevel == "error":
-            loglevel = logging.ERROR
-        # else:
-        #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(loglevel)
-
-        formatter = logging.Formatter(
-            fmt="[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s",
-            datefmt="%H:%M:%S",
+        self.logger = Logger(
+            module_name=__name__,
+            log_file=logfile,
+            log_level=logging.DEBUG,
+            delete_old_logfile=True,
+            streamhandler=True,
+            filehandler=True,
         )
-
-        fileHandler = logging.FileHandler(logfile)
-        fileHandler.setFormatter(formatter)
-        fileHandler.setLevel(loglevel)
-        self.logger.addHandler(fileHandler)
-        self.logger.info(f"Logging to {logfile}")
-
-        self.logger.debug(f"Logger setup finished for {__name__} module")
-        ### Logger setup finished ###
 
         ### Read config ###
         self.config = configparser.ConfigParser()
