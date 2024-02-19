@@ -21,7 +21,7 @@ class RadioInterface:
         self.logger = Logger(
             module_name=__name__,
             log_file=logfile,
-            log_level=logging.DEBUG,
+            log_level=loglevel,
             delete_old_logfile=True,
             streamhandler=True,
             filehandler=True,
