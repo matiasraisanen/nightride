@@ -1,4 +1,3 @@
-
 import configparser
 import json
 import logging
@@ -10,54 +9,59 @@ import threading
 
 from AudioPlayer import AudioPlayer
 
+
 class NightRideAPI:
-    def __init__(self, loglevel: str='error', logfile: str='radio.log'):
+    def __init__(self, loglevel: str = "error", logfile: str = "radio.log"):
         ### Read config ###
         config = configparser.ConfigParser()
-        config.read('settings.ini')
-        
+        config.read("settings.ini")
+
         ### Logger setup ###
-        if loglevel == 'info':
+        if loglevel == "info":
             loglevel = logging.INFO
-        elif loglevel == 'debug':
+        elif loglevel == "debug":
             loglevel = logging.DEBUG
-        elif loglevel == 'error':
+        elif loglevel == "error":
             loglevel = logging.ERROR
         # else:
         #     raise Exception(f'Tried to use invalid loglevel \'{loglevel}\'')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(loglevel)
-        
-        formatter = logging.Formatter(fmt='[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s', datefmt='%H:%M:%S')
-        
+
+        formatter = logging.Formatter(
+            fmt="[%(asctime)s]-[%(name)s]-[%(levelname)s]: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+
         fileHandler = logging.FileHandler(logfile)
         fileHandler.setFormatter(formatter)
         fileHandler.setLevel(loglevel)
         self.logger.addHandler(fileHandler)
-        self.logger.info(f'Logging to {logfile}')
-            
-        self.logger.debug(f'Logger setup finished for {__name__} module')
+        self.logger.info(f"Logging to {logfile}")
+
+        self.logger.debug(f"Logger setup finished for {__name__} module")
         ### Logger setup finished ###
-        
-        self.SSE_URL = config['URLS']['sse_url']
-        AUDIO_STREAM_BASE_URL = config['URLS']['audio_stream_base_url']
-        
-        stationlist = config.items('STATIONS')
+
+        self.SSE_URL = config["URLS"]["sse_url"]
+        AUDIO_STREAM_BASE_URL = config["URLS"]["audio_stream_base_url"]
+
+        stationlist = config.items("STATIONS")
         self.stations = []
         for key, value in stationlist:
             self.stations.append(value)
-        
+
         # Initialize SSE client
         self.init_client(self.SSE_URL)
-        
+
         # Initialize audio player
-        self.audioPlayer = AudioPlayer(base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel)
-        
-        
+        self.audioPlayer = AudioPlayer(
+            base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel
+        )
+
         for x in self.stations:
-            self.logger.debug(f'Station {self.stations.index(x)}: {x}')
-        
-        self.station = 'chillsynth'
+            self.logger.debug(f"Station {self.stations.index(x)}: {x}")
+
+        self.station = "chillsynth"
         self.now_playing = {}
         self.audioPlayer.play(self.station)
 
@@ -70,16 +74,16 @@ class NightRideAPI:
 
     def fetch_sse(self, url, headers):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
+        http = urllib3.PoolManager(cert_reqs="CERT_NONE", assert_hostname=False)
         try:
-            return http.request('GET', url, preload_content=False, headers=headers)
+            return http.request("GET", url, preload_content=False, headers=headers)
         except Exception as e:
             self.logger.error("fetch_sse error")
             self.logger.error(e)
 
     def init_client(self, sse_url):
-        self.logger.debug(f'Start SSE client')
-        headers = {'Accept': 'text/event-stream'}
+        self.logger.debug(f"Start SSE client")
+        headers = {"Accept": "text/event-stream"}
         try:
             self.response = self.fetch_sse(sse_url, headers)
             self.client = sseclient.SSEClient(self.response)
@@ -88,7 +92,9 @@ class NightRideAPI:
             self.logger.error(e)
 
     def keep_sse_client_alive(self):
-        self.logger.error("Keepalive event not received in time. Restarting sse client.")
+        self.logger.error(
+            "Keepalive event not received in time. Restarting sse client."
+        )
         self.client.close()
         self.init_client(self.SSE_URL)
 
@@ -102,65 +108,73 @@ class NightRideAPI:
         # while True:
         try:
             # Start a timer to keep SSE connection alive
-            keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
+            keep_alive_timer = threading.Timer(
+                countdown_seconds, self.keep_sse_client_alive
+            )
 
             for event in self.client.events():
-                self.logger.debug(f'SSE event received: {event.data}')
-                
+                self.logger.debug(f"SSE event received: {event.data}")
+
                 if event.data == "keepalive":
                     # Keepalive events should be received every {countdown_seconds}.
                     # We wait for {countdown_seconds} to pass, after which we assume the connection has been dropped, and we need to restart it.
-                    self.logger.debug(f'Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer')
+                    self.logger.debug(
+                        f"Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer"
+                    )
                     keep_alive_timer.cancel()
-                    keep_alive_timer = threading.Timer(countdown_seconds, self.keep_sse_client_alive)  
+                    keep_alive_timer = threading.Timer(
+                        countdown_seconds, self.keep_sse_client_alive
+                    )
                     keep_alive_timer.start()
 
                 elif event.data != "keepalive":
                     # Event can contain undefined values. Thus we need to initiate them as empty strings.
-                    artist = ''
-                    title = ''
-                    station = ''
+                    artist = ""
+                    title = ""
+                    station = ""
 
                     data = json.loads(event.data)
-                    if 'station' in data[0]:
-                        station = data[0]['station']
-                    station = data[0]['station']
+                    if "station" in data[0]:
+                        station = data[0]["station"]
+                    station = data[0]["station"]
 
                     # start_time is used to *estimate* play time on the interface
                     start_time = time.perf_counter()
 
-                    if 'rekt' in data[0]['station']:
+                    if "rekt" in data[0]["station"]:
                         # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
                         # These stations have to be handled in a different manner.
-                        pattern = '(.+)\s-\s(.+)'
-                        match = re.search(pattern, data[0]['title'])
+                        pattern = "(.+)\s-\s(.+)"
+                        match = re.search(pattern, data[0]["title"])
                         if match:
                             artist = match.group(1)
                             title = match.group(2)
                         else:
-                            if 'title' in data[0]:
-                                title = data[0]['title']
+                            if "title" in data[0]:
+                                title = data[0]["title"]
                     else:
-                        if 'artist' in data[0]:
-                            artist = data[0]['artist']
-                        if 'title' in data[0]:
-                            title = data[0]['title']
-                        
+                        if "artist" in data[0]:
+                            artist = data[0]["artist"]
+                        if "title" in data[0]:
+                            title = data[0]["title"]
+
                     current = {
                         "artist": artist,
                         "song": title,
-                        "started_at": start_time
+                        "started_at": start_time,
                     }
                     self.now_playing[station] = current
-                    self.logger.debug(f'New song detected on {station}: {artist} - {title}')
+                    self.logger.debug(
+                        f"New song detected on {station}: {artist} - {title}"
+                    )
 
-                    
         except Exception as e:
             self.logger.error("get_metadata error")
             self.logger.error(e)
 
-if __name__ == '__main__':
-    nightRide = NightRideAPI(loglevel='debug')
+
+if __name__ == "__main__":
+    nightRide = NightRideAPI(loglevel="debug")
     try:
         nightRide.start()
     except KeyboardInterrupt:
