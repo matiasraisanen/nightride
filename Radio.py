@@ -94,7 +94,8 @@ class RadioInterface:
         curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)
         
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
-        curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_MAGENTA)
+        # curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_MAGENTA) # Cyan on magenta is hard to read
+        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_MAGENTA)
         curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_WHITE)
         curses.init_pair(6, curses.COLOR_BLACK, curses.COLOR_MAGENTA)
         curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_RED)
