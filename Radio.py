@@ -23,7 +23,7 @@ class RadioInterface:
             log_file=logfile,
             log_level=loglevel,
             delete_old_logfile=True,
-            streamhandler=True,
+            streamhandler=False,
             filehandler=True,
         )
 
