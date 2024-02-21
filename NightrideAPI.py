@@ -12,7 +12,7 @@ from AudioPlayer import AudioPlayer
 
 
 class NightRideAPI:
-    def __init__(self, loglevel: str = "error", logfile: str = "radio.log"):
+    def __init__(self, loglevel=logging.INFO, logfile: str = "radio.log"):
         ### Read config ###
         config = configparser.ConfigParser()
         config.read("settings.ini")
@@ -43,7 +43,7 @@ class NightRideAPI:
         )
 
         for x in self.stations:
-            self.logger.debug(f"Station {self.stations.index(x)}: {x}")
+            self.logger.log.debug(f"Station {self.stations.index(x)}: {x}")
 
         self.station = "chillsynth"
         self.now_playing = {}
@@ -62,21 +62,21 @@ class NightRideAPI:
         try:
             return http.request("GET", url, preload_content=False, headers=headers)
         except Exception as e:
-            self.logger.error("fetch_sse error")
-            self.logger.error(e)
+            self.logger.log.error("fetch_sse error")
+            self.logger.log.error(e)
 
     def init_client(self, sse_url):
-        self.logger.debug(f"Start SSE client")
+        self.logger.log.debug(f"Start SSE client")
         headers = {"Accept": "text/event-stream"}
         try:
             self.response = self.fetch_sse(sse_url, headers)
             self.client = sseclient.SSEClient(self.response)
         except Exception as e:
-            self.logger.error("init_client error")
-            self.logger.error(e)
+            self.logger.log.error("init_client error")
+            self.logger.log.error(e)
 
     def keep_sse_client_alive(self):
-        self.logger.error(
+        self.logger.log.error(
             "Keepalive event not received in time. Restarting sse client."
         )
         self.client.close()
@@ -97,12 +97,12 @@ class NightRideAPI:
             )
 
             for event in self.client.events():
-                self.logger.debug(f"SSE event received: {event.data}")
+                self.logger.log.debug(f"SSE event received: {event.data}")
 
                 if event.data == "keepalive":
                     # Keepalive events should be received every {countdown_seconds}.
                     # We wait for {countdown_seconds} to pass, after which we assume the connection has been dropped, and we need to restart it.
-                    self.logger.debug(
+                    self.logger.log.debug(
                         f"Keepalive detected, resfreshing {countdown_seconds}sec keepalive timer"
                     )
                     keep_alive_timer.cancel()
@@ -148,17 +148,17 @@ class NightRideAPI:
                         "started_at": start_time,
                     }
                     self.now_playing[station] = current
-                    self.logger.debug(
+                    self.logger.log.debug(
                         f"New song detected on {station}: {artist} - {title}"
                     )
 
         except Exception as e:
-            self.logger.error("get_metadata error")
-            self.logger.error(e)
+            self.logger.log.error("get_metadata error")
+            self.logger.log.error(e)
 
 
 if __name__ == "__main__":
-    nightRide = NightRideAPI(loglevel="debug")
+    nightRide = NightRideAPI(loglevel=logging.DEBUG)
     try:
         nightRide.start()
     except KeyboardInterrupt:

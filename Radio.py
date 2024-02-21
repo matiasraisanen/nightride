@@ -11,7 +11,7 @@ from NightrideAPI import NightRideAPI
 
 
 class RadioInterface:
-    def __init__(self, loglevel: str = "error", logfile: str = "radio.log"):
+    def __init__(self, loglevel=logging.INFO, logfile: str = "radio.log"):
         ### ArgParse ###
         # parser = argparse.ArgumentParser(description='Text-based user interface for Nightride.fm.')
 
@@ -33,7 +33,7 @@ class RadioInterface:
 
         self.LCD1602_MODULE = self.config.getboolean("ADDONS", "LCD1602")
         if self.LCD1602_MODULE:
-            self.logger.debug(f"Initializing lcd module")
+            self.logger.log.debug(f"Initializing lcd module")
             import RGB1602
 
             self.lcd = RGB1602.RGB1602(16, 2, "error", logfile="radio.log")
@@ -61,7 +61,7 @@ class RadioInterface:
             curses.wrapper(self.main)
         except Exception as e:
             print("An error caused the program to crash. See radio.log for details")
-            self.logger.error(e)
+            self.logger.log.error(e)
 
     def main(self, stdscr):
         # curses.noecho()
@@ -84,9 +84,9 @@ class RadioInterface:
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_BLACK)
 
         rows, cols = stdscr.getmaxyx()
-        self.logger.debug(f"Window size at x:{cols} y:{rows}")
+        self.logger.log.debug(f"Window size at x:{cols} y:{rows}")
         if rows < 11 or cols < 52:
-            self.logger.error(
+            self.logger.log.error(
                 f"Window size too small to draw interface! Needs to be at least 52 by 11 characters."
             )
 
@@ -129,10 +129,10 @@ class RadioInterface:
             key = stdscr.getkey()
             if key == "KEY_RESIZE":
                 rows, cols = stdscr.getmaxyx()
-                self.logger.debug(f"User resized the window to x:{cols} y:{rows}")
+                self.logger.log.debug(f"User resized the window to x:{cols} y:{rows}")
                 self.draw_radio_frame(stdscr)
             else:
-                self.logger.debug(f"User pressed key {key}")
+                self.logger.log.debug(f"User pressed key {key}")
         except curses.error as e:
             # No input from user. Let's pass.
             pass
@@ -159,7 +159,7 @@ class RadioInterface:
         # Legacy: change station with arrow keys
         # # Previous station
         # if key == "KEY_LEFT":
-        #     self.logger.debug("Previous station")
+        #     self.logger.log.debug("Previous station")
         #     index_of_prev = self.stations.index(self.station) - 1
         #     if index_of_prev >= 0:
         #         prev_station = self.stations[index_of_prev]
@@ -167,7 +167,7 @@ class RadioInterface:
 
         # # Next station
         # if key == "KEY_RIGHT":
-        #     self.logger.debug("Next station")
+        #     self.logger.log.debug("Next station")
         #     index_of_next = self.stations.index(self.station) + 1
         #     if index_of_next < len(self.stations):
         #         next_station = self.stations[index_of_next]
@@ -269,7 +269,7 @@ class RadioInterface:
             key = ""
             try:
                 key = stdscr.getkey()
-                self.logger.debug(f"User pressed key {key}")
+                self.logger.log.debug(f"User pressed key {key}")
             except curses.error as e:
                 # No input from user. Let's pass.
                 pass
@@ -459,7 +459,7 @@ class RadioInterface:
 
                 # User pressing "ENTER" will activate the selection
                 if key == curses.KEY_ENTER or key == 10 or key == 13 or key == "\n":
-                    self.logger.debug(
+                    self.logger.log.debug(
                         f"User selected station {self.stations[selected]} via F2"
                     )
                     self.set_station(self.stations[selected])
@@ -476,7 +476,7 @@ class RadioInterface:
             self.config.write(configfile)
 
     def set_volume_slider(self, volume):
-        self.logger.debug(f"Set volume slider to {volume}")
+        self.logger.log.debug(f"Set volume slider to {volume}")
         try:
             slider = list("VOL: ◄----------►")
             slider[int(volume) + 6] = str(volume)
@@ -485,15 +485,15 @@ class RadioInterface:
             self.vol_win.addstr("".join(slider))
             self.vol_win.refresh()
         except:
-            self.logger.error(f"Failed to set volume slider to {volume}")
+            self.logger.log.error(f"Failed to set volume slider to {volume}")
 
     def shorten(self, word, max_length=29):
         if len(word) > max_length:
-            self.logger.debug(f'Truncating "{word}" for interface')
+            self.logger.log.debug(f'Truncating "{word}" for interface')
             trunc_word = list(word[0:max_length])
             trunc_word[-3:] = "..."
             word = "".join(trunc_word)
-            self.logger.debug(f'Truncated into "{word}"')
+            self.logger.log.debug(f'Truncated into "{word}"')
         return word
 
     def draw_now_playing_win(self):
@@ -534,7 +534,7 @@ class RadioInterface:
             self.vol_win.addstr("".join(slider))
             self.vol_win.refresh()
         except:
-            self.logger.error(f"Failed to draw volume window")
+            self.logger.log.error(f"Failed to draw volume window")
 
     def set_now_playing(self, redraw=False):
         try:
@@ -560,15 +560,15 @@ class RadioInterface:
                         freezeFor=0,
                     )
         except KeyError as e:
-            self.logger.warning(f"No data for station {self.station} yet")
+            self.logger.log.warning(f"No data for station {self.station} yet")
         except Exception as e:
-            self.logger.error(f"Failed to set now playing: {e}")
+            self.logger.log.error(f"Failed to set now playing: {e}")
 
     def set_playtime(self):
         try:
             current_song_start = self.api.now_playing[self.station]["started_at"]
         except KeyError:
-            self.logger.warning("Could not get current_song_start")
+            self.logger.log.warning("Could not get current_song_start")
             current_song_start = 0
         timenow = time.perf_counter()
         timedelta = int(timenow) - int(current_song_start)
@@ -582,17 +582,17 @@ class RadioInterface:
             time_played_win.addstr(time_to_print)
             time_played_win.refresh()
         except:
-            self.logger.error(f"Failed to draw time played.")
+            self.logger.log.error(f"Failed to draw time played.")
         self.orig_time = time_to_print
 
     def set_station(self, station):
-        self.logger.debug(f"Set station => {station}")
+        self.logger.log.debug(f"Set station => {station}")
         try:
             self.station = station
             self.api.audioPlayer.play(station)
         except Exception as e:
-            self.logger.error(f"Failed to set station to {station}")
-            self.logger.error(e)
+            self.logger.log.error(f"Failed to set station to {station}")
+            self.logger.log.error(e)
 
     def draw_vu_meter(self):
         # Obviously, this VU meter is purely cosmetic :-)
@@ -611,7 +611,7 @@ class RadioInterface:
             vu_win.addstr(0, 0, meter)
             vu_win.refresh()
         except:
-            self.logger.error(f"Failed to draw VU meter")
+            self.logger.log.error(f"Failed to draw VU meter")
 
     def draw_menu_bar(self, stdscr):
         max_rows, max_cols = stdscr.getmaxyx()
@@ -629,7 +629,7 @@ class RadioInterface:
 
 
 if __name__ == "__main__":
-    radio = RadioInterface(loglevel="debug")
+    radio = RadioInterface(loglevel=logging.INFO)
 
     if radio.LCD1602_MODULE:
         radio.lcd.clear()

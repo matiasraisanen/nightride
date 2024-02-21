@@ -5,35 +5,35 @@ from logger import Logger
 
 
 class AudioPlayer:
-    def __init__(self, base_url, loglevel: str = "error", logfile: str = "radio.log"):
+    def __init__(self, base_url, loglevel=logging.INFO, logfile: str = "radio.log"):
         try:
             self.logger = Logger(
-            module_name=__name__,
-            log_file=logfile,
-            log_level=loglevel,
-            delete_old_logfile=True,
-            streamhandler=True,
-            filehandler=True,
-        )
+                module_name=__name__,
+                log_file=logfile,
+                log_level=loglevel,
+                delete_old_logfile=True,
+                streamhandler=True,
+                filehandler=True,
+            )
 
             self.instance = Instance("--input-repeat=-1", "-q")
             self.player = self.instance.media_player_new()
             self.base_url = base_url
         except Exception as e:
-            self.logger.error(e)
+            self.logger.log.error(e)
 
     def play(self, station: str = "chillsynth"):
-        self.logger.debug(f"Press play")
+        self.logger.log.debug(f"Press play")
         try:
             self.media = self.instance.media_new(f"{self.base_url}/{station}.m4a")
-            self.logger.debug(f"Playing url {self.base_url}/{station}.m4a")
+            self.logger.log.debug(f"Playing url {self.base_url}/{station}.m4a")
             self.player.set_media(self.media)
             self.player.play()
         except Exception as e:
-            self.logger.error(e)
+            self.logger.log.error(e)
 
     def stop(self):
-        self.logger.debug(f"Press stop")
+        self.logger.log.debug(f"Press stop")
         self.player.stop()
 
     def get_info(self):
@@ -44,14 +44,14 @@ class AudioPlayer:
         # Hey at least it's linear!
         try:
             volume_percent = volume * 11
-            self.logger.debug(f"Set volume to {volume_percent}%")
+            self.logger.log.debug(f"Set volume to {volume_percent}%")
             self.player.audio_set_volume(volume_percent)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.log.error(e)
 
 
 if __name__ == "__main__":
-    player = AudioPlayer(loglevel="debug", logfile="radio.log")
+    player = AudioPlayer(loglevel=logging.DEBUG, logfile="radio.log")
     player.play()
     print("10 second test play of chillsynth!")
     time.sleep(10)
