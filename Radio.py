@@ -112,11 +112,14 @@ class RadioInterface:
         # curses.textpad.rectangle(stdscr, 2, 2, 10, 50)
 
         # Draw a double line thick rectangle, 50columns wide
-        stdscr.addstr(2, 2, "╔═ --------- -- ════════════════════════════════╗")
+        # stdscr.addstr(2, 2, "╔═ --------- -- ════════════════════════════════╗")
+        stdscr.addstr(2, 2, "┏━ ───────── ── ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
 
         for i in range(7):
-            stdscr.addstr(i + 3, 2, f"║{str().center(47)}║")
-        stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
+            # stdscr.addstr(i + 3, 2, f"║{str().center(47)}║")
+            stdscr.addstr(i + 3, 2, f"┃{str().center(47)}┃")
+        # stdscr.addstr(10, 2, "╚═══════════════════════════════════════════════╝")
+        stdscr.addstr(10, 2, "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
 
         # Draw the rest of the interface
         stdscr.addstr(2, 5, "NIGHTRIDE.", curses.color_pair(2))
@@ -478,7 +481,7 @@ class RadioInterface:
     def set_volume_slider(self, volume):
         self.logger.log.debug(f"Set volume slider to {volume}")
         try:
-            slider = list("VOL: ◄----------►")
+            slider = list("VOL: ◄──────────►")
             slider[int(volume) + 6] = str(volume)
 
             self.vol_win = curses.newwin(1, 18, 3, 31)
@@ -527,7 +530,7 @@ class RadioInterface:
 
     def draw_volume_win(self):
         try:
-            slider = list("VOL: ◄----------►")
+            slider = list("VOL: ◄──────────►")
             slider[int(self.volume) + 6] = str(self.volume)
 
             self.vol_win = curses.newwin(1, 18, 3, 31)
