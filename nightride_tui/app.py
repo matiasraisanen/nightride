@@ -8,7 +8,7 @@ from textual.containers import Container
 from textual.widgets import Header, Footer
 
 from .api import Config, NightrideClient, StationMetadata
-from .widgets import RadioDisplay, MenuBar
+from .widgets import RadioDisplay
 from .modals import AboutModal, StationModal
 
 
@@ -26,11 +26,6 @@ class NightrideApp(App):
     }
     RadioDisplay {
         height: 7;
-    }
-    MenuBar {
-        height: 1;
-        margin: 1 0 0 0;
-        text-align: center;
     }
     """
 
@@ -56,12 +51,12 @@ class NightrideApp(App):
         super().__init__()
         self.config = Config.load()
         self.client = NightrideClient(self.config)
+        self._scroll_counter = 0
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Container(id="main-container"):
             yield RadioDisplay(id="radio-display")
-            yield MenuBar()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -99,9 +94,14 @@ class NightrideApp(App):
         except Exception:
             return  # Widget not available (e.g., modal is open)
 
-        # Refresh VU meter animation
-        if display.vu_enabled:
-            display.refresh()
+        # Advance text scroll every 3 ticks (~0.3 seconds)
+        self._scroll_counter += 1
+        if self._scroll_counter >= 3:
+            self._scroll_counter = 0
+            display.advance_scroll()
+
+        # Refresh display (VU meter animation + scroll)
+        display.refresh()
 
         # Update playtime
         metadata = self.client.get_current_metadata()

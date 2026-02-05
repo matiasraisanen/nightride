@@ -8,12 +8,12 @@ from textual.widgets import Static
 class RadioDisplay(Static):
     """
     Complete radio display with box-drawing frame containing all UI elements.
+    Long artist/song names scroll horizontally.
 
     Layout (49 chars wide):
-    ┏━ ───────── ── ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃  NIGHTRIDE. FM                               ┃
+    ┏━ NIGHTRIDE FM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
     ┃  station 1: nightride    VOL: ◄──4───────►   ┃
-    ┃  ...............................................┃
+    ┃  .............................................┃
     ┃  Artist: Artist Name Here                    ┃
     ┃    Song: Song Title Here                     ┃
     ┃  Played: 00:00                    ▁▂▃▄▅▆▇█   ┃
@@ -28,20 +28,31 @@ class RadioDisplay(Static):
     song: reactive[str] = reactive("")
     elapsed: reactive[int] = reactive(0)
     vu_enabled: reactive[bool] = reactive(True)
+    scroll_offset: reactive[int] = reactive(0)
 
     # Constants
     FRAME_WIDTH = 49
     CONTENT_WIDTH = 45  # Inside the frame borders
-    MAX_TEXT_LEN = 29
+    MAX_TEXT_LEN = 37  # Display width for artist/song
     VU_ICONS = "▁▂▃▄▅▆▇█"
     VU_WIDTH = 10
+    SCROLL_PADDING = "   ~~~   "  # Padding between scroll cycles
 
-    def _truncate(self, text: str, max_len: int = None) -> str:
-        """Truncate text with ellipsis."""
-        max_len = max_len or self.MAX_TEXT_LEN
-        if len(text) > max_len:
-            return text[:max_len - 3] + "..."
-        return text
+    def _get_scrolling_text(self, text: str, max_len: int) -> str:
+        """Get the visible portion of scrolling text."""
+        if not text or len(text) <= max_len:
+            return (text or "---").ljust(max_len)
+
+        # Create scrolling text with padding for seamless loop
+        full_text = text + self.SCROLL_PADDING + text
+        offset = self.scroll_offset % (len(text) + len(self.SCROLL_PADDING))
+        visible = full_text[offset:offset + max_len]
+
+        # Ensure we always have max_len characters
+        if len(visible) < max_len:
+            visible += full_text[:max_len - len(visible)]
+
+        return visible
 
     def _make_volume_slider(self) -> str:
         """Create volume slider string."""
@@ -61,15 +72,6 @@ class RadioDisplay(Static):
         seconds = self.elapsed % 60
         return f"Played: {minutes:02d}:{seconds:02d}"
 
-    def _pad_line(self, content: str, width: int = None) -> str:
-        """Pad a line to fit inside the frame."""
-        width = width or self.CONTENT_WIDTH
-        # Account for markup when padding
-        visible_len = len(content.replace("[cyan]", "").replace("[/cyan]", "")
-                                 .replace("[magenta]", "").replace("[/magenta]", ""))
-        padding = width - visible_len
-        return content + " " * max(0, padding)
-
     def render(self) -> str:
         # Build each line (frame is 49 chars wide, content is 45 chars between ┃ borders)
         station_vol = f"station {self.station_num}: {self.station_name}"
@@ -77,8 +79,9 @@ class RadioDisplay(Static):
         # Pad station info to push volume slider to the right (total 45 chars)
         station_line = (station_vol.ljust(28) + vol_slider).ljust(45)
 
-        artist_display = self._truncate(self.artist) if self.artist else "---"
-        song_display = self._truncate(self.song) if self.song else "---"
+        # Get scrolling text for artist and song
+        artist_display = self._get_scrolling_text(self.artist, self.MAX_TEXT_LEN)
+        song_display = self._get_scrolling_text(self.song, self.MAX_TEXT_LEN)
 
         playtime = self._make_playtime()
         vu_meter = self._make_vu_meter()
@@ -86,11 +89,11 @@ class RadioDisplay(Static):
         bottom_line = playtime.ljust(35) + vu_meter
 
         lines = [
-            "┏━ [cyan]NIGHTRIDE.[/cyan] [cyan]FM[/cyan] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+            "┏━ [cyan]NIGHTRIDE[/cyan] [cyan]FM[/cyan] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
             f"┃  {station_line}┃",
             "┃  .............................................┃",
-            f"┃  Artist: [cyan]{artist_display.ljust(37)}[/cyan]┃",
-            f"┃    Song: [magenta]{song_display.ljust(37)}[/magenta]┃",
+            f"┃  Artist: [cyan]{artist_display}[/cyan]┃",
+            f"┃    Song: [magenta]{song_display}[/magenta]┃",
             f"┃  {bottom_line}┃",
             "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
         ]
@@ -107,6 +110,9 @@ class RadioDisplay(Static):
 
     def update_metadata(self, artist: str, song: str) -> None:
         """Update now playing metadata."""
+        # Reset scroll when metadata changes
+        if artist != self.artist or song != self.song:
+            self.scroll_offset = 0
         self.artist = artist
         self.song = song
 
@@ -118,9 +124,9 @@ class RadioDisplay(Static):
         """Toggle VU meter on/off."""
         self.vu_enabled = not self.vu_enabled
 
-
-class MenuBar(Static):
-    """Menu bar showing available key bindings."""
-
-    def render(self) -> str:
-        return "[on white black]F1: ABOUT | F2: STATION | -/+: VOLUME | V: VU | F12: QUIT[/]"
+    def advance_scroll(self) -> None:
+        """Advance the scroll position for long text."""
+        # Only scroll if either artist or song is longer than max
+        if (len(self.artist) > self.MAX_TEXT_LEN or
+                len(self.song) > self.MAX_TEXT_LEN):
+            self.scroll_offset += 1

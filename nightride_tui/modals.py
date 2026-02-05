@@ -90,15 +90,8 @@ class StationModal(ModalScreen[str | None]):
         height: 3;
         margin: 1 0;
     }
-    StationModal .station-prev, StationModal .station-next {
+    StationModal .station-prev, StationModal .station-next, StationModal .station-current {
         text-align: center;
-        color: $text-muted;
-    }
-    StationModal .station-current {
-        text-align: center;
-        text-style: bold;
-        color: cyan;
-        background: $primary-darken-2;
     }
     StationModal .footer {
         margin-top: 1;
@@ -155,23 +148,25 @@ class StationModal(ModalScreen[str | None]):
             f"Station {self.selected_index + 1}:"
         )
 
-        # Previous station
+        # Previous station (offset left by 1 char, blue background on name only)
         prev_widget = self.query_one("#station-prev", Static)
         if self.selected_index > 0:
-            prev_widget.update(f"  {self._station_list[self.selected_index - 1].center(15)}  ")
+            prev_name = self._station_list[self.selected_index - 1]
+            prev_widget.update(f" [black on blue] {prev_name.center(13)} [/]   ")
         else:
             prev_widget.update("")
 
-        # Current station
+        # Current station (with arrows, cyan background on name)
         current = self._station_list[self.selected_index]
         self.query_one("#station-current", Static).update(
-            f"→ {current.center(15)} ←"
+            f"  →[black on cyan] {current.center(13)} [/]←  "
         )
 
-        # Next station
+        # Next station (offset left by 1 char, blue background on name only)
         next_widget = self.query_one("#station-next", Static)
         if self.selected_index < len(self._station_list) - 1:
-            next_widget.update(f"  {self._station_list[self.selected_index + 1].center(15)}  ")
+            next_name = self._station_list[self.selected_index + 1]
+            next_widget.update(f" [black on blue] {next_name.center(13)} [/]   ")
         else:
             next_widget.update("")
 
