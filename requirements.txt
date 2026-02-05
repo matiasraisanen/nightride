@@ -1,0 +1,11 @@
+# Nightride FM TUI Dependencies
+
+# TUI framework
+textual>=0.41.0
+
+# Audio playback
+python-vlc>=3.0.0
+
+# Metadata streaming
+sseclient-py>=1.7.0
+urllib3>=1.26.0
