@@ -7,15 +7,16 @@ import urllib3
 import time
 import threading
 from logger import Logger
+from paths import LOG_FILE, SETTINGS_FILE
 
 from AudioPlayer import AudioPlayer
 
 
 class NightRideAPI:
-    def __init__(self, loglevel=logging.INFO, logfile: str = "radio.log"):
+    def __init__(self, loglevel=logging.INFO, logfile: str = LOG_FILE):
         ### Read config ###
         config = configparser.ConfigParser()
-        config.read("settings.ini")
+        config.read(SETTINGS_FILE)
 
         self.logger = Logger(
             module_name=__name__,
@@ -39,15 +40,13 @@ class NightRideAPI:
 
         # Initialize audio player
         self.audioPlayer = AudioPlayer(
-            base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel
+            base_url=AUDIO_STREAM_BASE_URL, loglevel=loglevel, logfile=logfile
         )
 
         for x in self.stations:
             self.logger.log.debug(f"Station {self.stations.index(x)}: {x}")
 
-        self.station = "chillsynth"
         self.now_playing = {}
-        self.audioPlayer.play(self.station)
 
         thread_1 = threading.Thread(target=self.start)
         thread_1.daemon = True
@@ -57,8 +56,7 @@ class NightRideAPI:
         self.get_metadata()
 
     def fetch_sse(self, url, headers):
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        http = urllib3.PoolManager(cert_reqs="CERT_NONE", assert_hostname=False)
+        http = urllib3.PoolManager()
         try:
             return http.request("GET", url, preload_content=False, headers=headers)
         except Exception as e:
@@ -112,35 +110,27 @@ class NightRideAPI:
                     keep_alive_timer.start()
 
                 elif event.data != "keepalive":
-                    # Event can contain undefined values. Thus we need to initiate them as empty strings.
-                    artist = ""
-                    title = ""
-                    station = ""
-
                     data = json.loads(event.data)
-                    if "station" in data[0]:
-                        station = data[0]["station"]
                     station = data[0]["station"]
 
-                    # start_time is used to *estimate* play time on the interface
-                    start_time = time.perf_counter()
+                    # Event can contain undefined values. We need to turn them into empty strings.
+                    artist = data[0].get("artist") or ""
+                    title = data[0].get("title") or ""
 
-                    if "rekt" in data[0]["station"]:
-                        # Stations 'rekt' and 'rektory' have both the song title and the artist name in the 'title' section.
-                        # These stations have to be handled in a different manner.
-                        pattern = "(.+)\s-\s(.+)"
-                        match = re.search(pattern, data[0]["title"])
+                    if not artist:
+                        # Some tracks only have "Artist - Title" in the title field.
+                        pattern = r"(.+)\s-\s(.+)"
+                        match = re.search(pattern, title)
                         if match:
                             artist = match.group(1)
                             title = match.group(2)
-                        else:
-                            if "title" in data[0]:
-                                title = data[0]["title"]
+
+                    # 'at' is the song's start time as a unix timestamp in milliseconds.
+                    # Fall back to the time the event was received.
+                    if data[0].get("at"):
+                        start_time = data[0]["at"] / 1000
                     else:
-                        if "artist" in data[0]:
-                            artist = data[0]["artist"]
-                        if "title" in data[0]:
-                            title = data[0]["title"]
+                        start_time = time.time()
 
                     current = {
                         "artist": artist,
