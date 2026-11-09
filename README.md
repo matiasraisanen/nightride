@@ -28,6 +28,10 @@ Measures the audio level of the stream for the VU meter
 Finds the player's own audio stream in PulseAudio or PipeWire
 
 
+[settings.py](./settings.py)  
+Reads and saves settings.ini, with defaults for anything missing
+
+
 [settings.ini](./settings.ini)  
 Various settings for the player
 
@@ -54,11 +58,18 @@ Developed to work on Linux. I might add support for different operating systems 
 
 The interface is modelled after MS-DOS era applications, with pull-down menus and dialog boxes.
 
-Press **F10** to open the menus. **Alt** and the red letter of a menu opens it directly: **Alt-R** for *Radio*, **Alt-O** for *Options*.  
+Press **F10** to open the menus. **Alt** and the red letter of a menu opens it directly: **Alt-R** for *Radio*, **Alt-O** for *Options*, **Alt-T** for *Theme*.  
 In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to close. Red letters in menu items are hotkeys.
 
 - *Radio*: Browse stations, Help, About, Exit
-- *Options*: Mute, VU meter, Clock, and Settings for the default station and startup volume
+- *Options*: Mute, VU meter, Clock, and Settings for the default station, startup volume and theme
+- *Theme*: the color scheme
+  - *Synthwave*: purple and cyan on dark grey (the default)
+  - *Outrun*: neon pink, orange and yellow on navy
+  - *Darksynth*: blood red and grey on black
+  - *DOS*: the classic blue MS-DOS look
+  - *C64*: light blue on dark blue, like a Commodore 64
+  - *Amber CRT* and *Green CRT*: single-colour monitors
 
 Press **F1** for help, which lists all the keys.
 
@@ -80,6 +91,8 @@ The player looks best in an 80 by 25 terminal, like in the old days. It needs at
 The VU meter needs `parec` and `pactl`, which come with PulseAudio and PipeWire (package `pulseaudio-utils` on Debian and Ubuntu).  
 It measures the music itself, so the volume setting doesn't change it, but it drops to zero while muted.  
 On terminals with 256 colours it uses the original VGA palette, regardless of your terminal's colour theme.
+
+If the stream drops, the player reconnects by itself and shows **RECONNECTING** meanwhile. **STREAM ERROR** means it has failed several times in a row, but it keeps trying. **NO SONG INFO** means the song information can't be fetched right now. The music may still play.
 
 If the player shows **NO AUDIO OUTPUT**, its sound isn't reaching your sound server. This can happen when PipeWire gets stuck, for example after suspend or after unplugging a dock. Restarting it usually helps:
 

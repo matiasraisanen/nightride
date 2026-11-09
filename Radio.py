@@ -1,34 +1,65 @@
-import configparser
 import curses
 import logging
 import time
+import unicodedata
 
+import settings
 from logger import Logger
-from paths import LOG_FILE, SETTINGS_FILE
+from paths import LOG_FILE
 
 from LevelMeter import CEILING_DB, FLOOR_DB, LevelMeter
 from NightrideAPI import NightRideAPI
 
-# The 16 colours of the VGA text mode palette, as (closest xterm-256 colour, basic curses colour, bright).
-# On 256-colour terminals the exact xterm colours are used, so the look doesn't depend on the terminal's theme.
-VGA = {
+# Colours as (closest xterm-256 colour, basic curses colour, bright). Most are the 16 colours of the VGA
+# text mode palette. On 256-colour terminals the exact xterm colours are used, so the look doesn't depend
+# on the terminal's theme.
+COLORS = {
     "black": (16, curses.COLOR_BLACK, False),
     "blue": (19, curses.COLOR_BLUE, False),
     "green": (34, curses.COLOR_GREEN, False),
     "cyan": (37, curses.COLOR_CYAN, False),
     "red": (124, curses.COLOR_RED, False),
+    "magenta": (127, curses.COLOR_MAGENTA, False),
     "lightgray": (248, curses.COLOR_WHITE, False),
     "darkgray": (240, curses.COLOR_BLACK, True),
     "lightblue": (63, curses.COLOR_BLUE, True),
     "lightgreen": (83, curses.COLOR_GREEN, True),
     "lightcyan": (87, curses.COLOR_CYAN, True),
     "lightred": (203, curses.COLOR_RED, True),
+    "lightmagenta": (207, curses.COLOR_MAGENTA, True),
     "yellow": (227, curses.COLOR_YELLOW, True),
     "white": (231, curses.COLOR_WHITE, True),
+    # Not in the VGA palette, for the other themes
+    "purple": (54, curses.COLOR_MAGENTA, False),
+    "darkpurple": (53, curses.COLOR_MAGENTA, False),
+    "charcoal": (236, curses.COLOR_BLACK, False),
+    "darkcharcoal": (235, curses.COLOR_BLACK, False),
+    "nearblack": (233, curses.COLOR_BLACK, False),
+    "slate": (238, curses.COLOR_BLACK, True),
+    "gray": (245, curses.COLOR_WHITE, False),
+    "pale": (252, curses.COLOR_WHITE, True),
+    "navy": (17, curses.COLOR_BLUE, False),
+    "orange": (208, curses.COLOR_YELLOW, False),
+    "hotpink": (198, curses.COLOR_MAGENTA, True),
+    "pink": (205, curses.COLOR_MAGENTA, True),
+    "lightpink": (213, curses.COLOR_MAGENTA, True),
+    "brightred": (196, curses.COLOR_RED, True),
+    "blood": (160, curses.COLOR_RED, False),
+    "darkred": (88, curses.COLOR_RED, False),
+    "deepred": (52, curses.COLOR_RED, False),
+    "amberbright": (220, curses.COLOR_YELLOW, True),
+    "amber": (214, curses.COLOR_YELLOW, True),
+    "amberdim": (172, curses.COLOR_YELLOW, False),
+    "amberdark": (94, curses.COLOR_YELLOW, False),
+    "greenbright": (120, curses.COLOR_GREEN, True),
+    "greendark": (22, curses.COLOR_GREEN, False),
+    "c64dark": (55, curses.COLOR_BLUE, False),
+    "c64light": (104, curses.COLOR_CYAN, False),
+    "c64mid": (61, curses.COLOR_BLUE, True),
 }
 
-# Style name => (foreground, background)
-STYLES = {
+# Style name => (foreground, background), per theme. A third value "underline" underlines the text.
+DOS_THEME = {
     "desktop": ("lightgray", "blue"),
     "menu": ("black", "lightgray"),
     "menu_hot": ("red", "lightgray"),
@@ -39,6 +70,8 @@ STYLES = {
     "window_title": ("yellow", "blue"),
     "label": ("cyan", "blue"),
     "value": ("white", "blue"),
+    "artist": ("white", "blue"),
+    "song": ("white", "blue"),
     "number": ("yellow", "blue"),
     "bar_full": ("lightcyan", "blue"),
     "bar_empty": ("cyan", "blue"),
@@ -47,9 +80,11 @@ STYLES = {
     "vu_high": ("lightred", "blue"),
     "vu_off": ("lightblue", "blue"),
     "error": ("white", "red"),
+    "warning": ("black", "yellow"),
     "dialog": ("black", "lightgray"),
     "dialog_border": ("white", "lightgray"),
     "dialog_value": ("blue", "lightgray"),
+    "dialog_key": ("red", "lightgray"),
     "list": ("black", "cyan"),
     "list_sel": ("white", "blue"),
     "button": ("black", "green"),
@@ -59,6 +94,205 @@ STYLES = {
     "button_shadow": ("black", "lightgray"),
     "shadow": ("darkgray", "black"),
 }
+
+# Purple and cyan on dark grey, like the original player. Anything not listed comes from the DOS theme.
+SYNTHWAVE_THEME = {
+    **DOS_THEME,
+    "desktop": ("darkpurple", "darkcharcoal"),
+    "menu": ("black", "cyan"),
+    "menu_hot": ("purple", "cyan"),
+    "menu_sel": ("white", "magenta"),
+    "menu_sel_hot": ("lightcyan", "magenta"),
+    "window": ("lightgray", "charcoal"),
+    "window_border": ("white", "charcoal"),
+    "window_title": ("lightcyan", "charcoal"),
+    "label": ("lightmagenta", "charcoal"),
+    "value": ("white", "charcoal"),
+    "artist": ("black", "cyan"),
+    "song": ("lightcyan", "purple"),
+    "number": ("lightcyan", "charcoal"),
+    "bar_full": ("lightmagenta", "charcoal"),
+    "bar_empty": ("magenta", "charcoal"),
+    "vu_low": ("lightcyan", "charcoal"),
+    "vu_mid": ("lightmagenta", "charcoal"),
+    "vu_high": ("lightred", "charcoal"),
+    "vu_off": ("darkpurple", "charcoal"),
+    "warning": ("black", "lightmagenta"),
+    "dialog": ("white", "purple"),
+    "dialog_border": ("lightcyan", "purple"),
+    "dialog_value": ("lightcyan", "purple"),
+    "dialog_key": ("lightmagenta", "purple"),
+    "list": ("black", "cyan"),
+    "list_sel": ("white", "magenta"),
+    "button": ("black", "cyan"),
+    "button_focus": ("black", "lightcyan"),
+    "button_cancel": ("white", "magenta"),
+    "button_cancel_focus": ("black", "lightmagenta"),
+    "button_shadow": ("black", "purple"),
+}
+
+# Neon pink, orange and yellow on navy, like a sunset over the highway
+OUTRUN_THEME = {
+    **DOS_THEME,
+    "desktop": ("purple", "black"),
+    "menu": ("black", "orange"),
+    "menu_hot": ("navy", "orange"),
+    "menu_sel": ("white", "hotpink"),
+    "menu_sel_hot": ("yellow", "hotpink"),
+    "window": ("pale", "navy"),
+    "window_border": ("pink", "navy"),
+    "window_title": ("yellow", "navy"),
+    "label": ("pink", "navy"),
+    "value": ("white", "navy"),
+    "artist": ("black", "orange"),
+    "song": ("white", "hotpink"),
+    "number": ("yellow", "navy"),
+    "bar_full": ("orange", "navy"),
+    "bar_empty": ("darkpurple", "navy"),
+    "vu_low": ("yellow", "navy"),
+    "vu_mid": ("orange", "navy"),
+    "vu_high": ("hotpink", "navy"),
+    "vu_off": ("darkpurple", "navy"),
+    "dialog": ("white", "darkpurple"),
+    "dialog_border": ("pink", "darkpurple"),
+    "dialog_value": ("orange", "darkpurple"),
+    "dialog_key": ("yellow", "darkpurple"),
+    "list": ("black", "orange"),
+    "list_sel": ("white", "hotpink"),
+    "button": ("black", "orange"),
+    "button_focus": ("black", "yellow"),
+    "button_cancel": ("white", "hotpink"),
+    "button_cancel_focus": ("black", "lightpink"),
+    "button_shadow": ("black", "darkpurple"),
+}
+
+# Blood red and grey on black, for the darker stations
+DARKSYNTH_THEME = {
+    **DOS_THEME,
+    "desktop": ("deepred", "black"),
+    "menu": ("lightgray", "slate"),
+    "menu_hot": ("brightred", "slate"),
+    "menu_sel": ("white", "blood"),
+    "menu_sel_hot": ("black", "blood"),
+    "window": ("lightgray", "nearblack"),
+    "window_border": ("blood", "nearblack"),
+    "window_title": ("brightred", "nearblack"),
+    "label": ("gray", "nearblack"),
+    "value": ("pale", "nearblack"),
+    "artist": ("white", "darkred"),
+    "song": ("pale", "deepred"),
+    "number": ("brightred", "nearblack"),
+    "bar_full": ("blood", "nearblack"),
+    "bar_empty": ("deepred", "nearblack"),
+    "vu_low": ("darkred", "nearblack"),
+    "vu_mid": ("blood", "nearblack"),
+    "vu_high": ("brightred", "nearblack"),
+    "vu_off": ("deepred", "nearblack"),
+    "error": ("white", "blood"),
+    "warning": ("black", "lightgray"),
+    "dialog": ("pale", "charcoal"),
+    "dialog_border": ("blood", "charcoal"),
+    "dialog_value": ("white", "charcoal"),
+    "dialog_key": ("brightred", "charcoal"),
+    "list": ("pale", "slate"),
+    "list_sel": ("white", "darkred"),
+    "button": ("white", "darkred"),
+    "button_focus": ("white", "blood"),
+    "button_cancel": ("pale", "slate"),
+    "button_cancel_focus": ("black", "lightgray"),
+    "button_shadow": ("black", "charcoal"),
+}
+
+# Light blue on dark blue inside a light blue border, like the Commodore 64 start screen
+C64_THEME = {
+    **DOS_THEME,
+    "desktop": ("c64light", "c64light"),
+    "menu": ("c64dark", "c64light"),
+    "menu_hot": ("c64dark", "c64light", "underline"),
+    "menu_sel": ("c64light", "c64dark"),
+    "menu_sel_hot": ("white", "c64dark"),
+    "window": ("c64light", "c64dark"),
+    "window_border": ("c64light", "c64dark"),
+    "window_title": ("white", "c64dark"),
+    "label": ("c64light", "c64dark"),
+    "value": ("white", "c64dark"),
+    "artist": ("c64dark", "c64light"),
+    "song": ("c64dark", "c64light"),
+    "number": ("white", "c64dark"),
+    "bar_full": ("c64light", "c64dark"),
+    "bar_empty": ("c64mid", "c64dark"),
+    "vu_low": ("lightgreen", "c64dark"),
+    "vu_mid": ("yellow", "c64dark"),
+    "vu_high": ("lightred", "c64dark"),
+    "vu_off": ("c64mid", "c64dark"),
+    "dialog": ("c64dark", "c64light"),
+    "dialog_border": ("white", "c64light"),
+    "dialog_value": ("white", "c64light"),
+    "dialog_key": ("white", "c64light"),
+    "list": ("c64light", "c64dark"),
+    "list_sel": ("c64dark", "white"),
+    "button": ("c64light", "c64dark"),
+    "button_focus": ("white", "c64dark"),
+    "button_cancel": ("white", "red"),
+    "button_cancel_focus": ("yellow", "red"),
+    "button_shadow": ("c64dark", "c64light"),
+}
+
+
+def crt_theme(brightest, bright, dim, dark):
+    # A single-colour monitor: one colour in four brightnesses on black, highlights as inverted blocks
+    return {
+        **DOS_THEME,
+        "desktop": (dark, "nearblack"),
+        "menu": ("nearblack", bright),
+        # With only one colour, hotkeys are told apart by underlining
+        "menu_hot": ("nearblack", bright, "underline"),
+        "menu_sel": (bright, dark),
+        "menu_sel_hot": (brightest, dark, "underline"),
+        "window": (dim, "nearblack"),
+        "window_border": (bright, "nearblack"),
+        "window_title": (brightest, "nearblack"),
+        "label": (dim, "nearblack"),
+        "value": (bright, "nearblack"),
+        "artist": ("nearblack", bright),
+        "song": ("nearblack", dim),
+        "number": (brightest, "nearblack"),
+        "bar_full": (bright, "nearblack"),
+        "bar_empty": (dark, "nearblack"),
+        "vu_low": (dim, "nearblack"),
+        "vu_mid": (bright, "nearblack"),
+        "vu_high": (brightest, "nearblack"),
+        "vu_off": (dark, "nearblack"),
+        "error": ("nearblack", brightest),
+        "warning": ("nearblack", bright),
+        "dialog": (bright, dark),
+        "dialog_border": (brightest, dark),
+        "dialog_value": (brightest, dark),
+        "dialog_key": (brightest, dark),
+        "list": ("nearblack", dim),
+        "list_sel": ("nearblack", brightest),
+        "button": ("nearblack", bright),
+        "button_focus": ("nearblack", brightest),
+        "button_cancel": (bright, "nearblack"),
+        "button_cancel_focus": (brightest, "nearblack"),
+        "button_shadow": ("nearblack", dark),
+        "shadow": ("nearblack", "black"),
+    }
+
+
+# In the order they appear in the menus
+THEMES = {
+    "Synthwave": SYNTHWAVE_THEME,
+    "Outrun": OUTRUN_THEME,
+    "Darksynth": DARKSYNTH_THEME,
+    "DOS": DOS_THEME,
+    "C64": C64_THEME,
+    "Amber CRT": crt_theme("amberbright", "amber", "amberdim", "amberdark"),
+    "Green CRT": crt_theme("greenbright", "lightgreen", "green", "greendark"),
+}
+
+# Theme menu hotkeys, where the first letter is already taken
+THEME_HOTKEYS = {"Darksynth": "k"}
 
 # Key hints on the bottom status line, per screen
 STATUS_HINTS = {
@@ -100,9 +334,12 @@ HELP = [
 ]
 
 # Focusable items in the settings dialog, top to bottom
-SETTINGS_STATION, SETTINGS_VOLUME, SETTINGS_OK, SETTINGS_CANCEL = range(4)
+SETTINGS_STATION, SETTINGS_VOLUME, SETTINGS_THEME, SETTINGS_OK, SETTINGS_CANCEL = range(5)
 
 MIN_COLS = 50
+
+# How long the metadata stream may be disconnected before the song info is marked as missing
+METADATA_GRACE_SECONDS = 10
 
 # Scrolling of names too long to fit
 MARQUEE_PAUSE = 2.0  # seconds to rest at the start of each loop
@@ -116,8 +353,35 @@ def hotkey(text):
     return parts[1].lower() if len(parts) > 1 else None
 
 
+def theme_label(name):
+    # The theme's name with its menu hotkey marked
+    i = name.lower().index(THEME_HOTKEYS.get(name, name[0].lower()))
+    return f"{name[:i]}~{name[i]}~{name[i + 1:]}"
+
+
 def visible_len(text):
     return len(text.replace("~", ""))
+
+
+def char_width(c):
+    # Japanese and other wide characters take two terminal columns, combining marks none
+    if unicodedata.combining(c):
+        return 0
+    return 2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
+
+
+def text_width(text):
+    return sum(char_width(c) for c in text)
+
+
+def clip(text, width):
+    # The longest start of text that fits in width columns
+    used = 0
+    for i, c in enumerate(text):
+        used += char_width(c)
+        if used > width:
+            return text[:i]
+    return text
 
 
 class RadioInterface:
@@ -132,20 +396,26 @@ class RadioInterface:
         )
 
         ### Read config ###
-        self.config = configparser.ConfigParser()
-        self.config.read(SETTINGS_FILE)
+        self.config = settings.load()
 
         self.api = NightRideAPI(loglevel=loglevel, logfile=logfile)
         self.stations = self.api.stations
 
-        self.VU_METER = self.config.getboolean("SETTINGS", "VU_METER")
+        self.VU_METER = settings.get_bool(self.config, "SETTINGS", "vu_meter")
         self.level_meter = LevelMeter(loglevel=loglevel, logfile=logfile)
         self.level_meter.enabled = self.VU_METER
-        self.CLOCK = self.config.getboolean("SETTINGS", "clock", fallback=True)
-        self.volume = min(9, max(0, self.config.getint("SETTINGS", "startup_volume", fallback=4)))
+        self.CLOCK = settings.get_bool(self.config, "SETTINGS", "clock")
+        self.theme = self.config["SETTINGS"]["theme"]
+        if self.theme not in THEMES:
+            self.logger.log.warning(f"Unknown theme {self.theme!r}")
+            self.theme = "Synthwave"
+        self.volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
         self.muted = False
         self.api.audioPlayer.set_volume(self.volume)
         self.station = self.config["SETTINGS"]["default_station"]
+        if self.station not in self.stations:
+            self.logger.log.warning(f"Default station {self.station!r} is not in the station list")
+            self.station = self.stations[0]
         self.version = "v2.0"
 
         # UI state. mode is one of the keys in STATUS_HINTS.
@@ -165,6 +435,9 @@ class RadioInterface:
         self.settings_field = 0
         self.settings_station = 0
         self.settings_volume = 0
+        # The theme shown while the dialog is open, and the one to go back to on Cancel
+        self.settings_theme = ""
+        self.theme_before_settings = ""
         # Exit dialog: whether "Yes" has focus
         self.exit_yes = True
         # Help dialog: first visible line, and how many lines fit
@@ -198,10 +471,11 @@ class RadioInterface:
             time.sleep(0.05)
 
     def init_styles(self):
+        # Called again when the theme changes. Redefining the colour pairs recolours the screen.
         self.styles = {}
-        for pair, (name, (fg, bg)) in enumerate(STYLES.items(), start=1):
-            fg_256, fg_basic, fg_bright = VGA[fg]
-            bg_256, bg_basic, _ = VGA[bg]
+        for pair, (name, (fg, bg, *flags)) in enumerate(THEMES[self.theme].items(), start=1):
+            fg_256, fg_basic, fg_bright = COLORS[fg]
+            bg_256, bg_basic, _ = COLORS[bg]
             attr = 0
             if curses.COLORS >= 256:
                 curses.init_pair(pair, fg_256, bg_256)
@@ -210,6 +484,8 @@ class RadioInterface:
             else:
                 curses.init_pair(pair, fg_basic, bg_basic)
                 attr = curses.A_BOLD if fg_bright else 0
+            if "underline" in flags:
+                attr |= curses.A_UNDERLINE
             self.styles[name] = curses.color_pair(pair) | attr
 
     ### Input ###
@@ -342,24 +618,33 @@ class RadioInterface:
             # The buttons are one row: going down from the last field lands on OK
             self.settings_field = field if on_buttons else field + 1
         elif key == "KEY_UP":
-            self.settings_field = SETTINGS_VOLUME if on_buttons else max(SETTINGS_STATION, field - 1)
+            self.settings_field = SETTINGS_THEME if on_buttons else max(SETTINGS_STATION, field - 1)
         elif key in ("\t", "KEY_BTAB"):
             step = 1 if key == "\t" else -1
-            self.settings_field = (field + step) % 4
+            self.settings_field = (field + step) % 5
         elif key in ("KEY_LEFT", "KEY_RIGHT"):
             step = -1 if key == "KEY_LEFT" else 1
             if field == SETTINGS_STATION:
                 self.settings_station = (self.settings_station + step) % len(self.stations)
             elif field == SETTINGS_VOLUME:
                 self.settings_volume = min(9, max(0, self.settings_volume + step))
+            elif field == SETTINGS_THEME:
+                names = list(THEMES)
+                self.settings_theme = names[(names.index(self.settings_theme) + step) % len(names)]
+                # Show the theme right away. Cancel puts the old one back.
+                self.theme = self.settings_theme
+                self.init_styles()
             else:
                 self.settings_field = SETTINGS_CANCEL if field == SETTINGS_OK else SETTINGS_OK
         elif key in ENTER_KEYS and field != SETTINGS_CANCEL:
             self.config.set("SETTINGS", "default_station", self.stations[self.settings_station])
             self.config.set("SETTINGS", "startup_volume", str(self.settings_volume))
-            self.save_config()
+            self.set_theme(self.settings_theme)
             self.mode = "main"
         elif key in ENTER_KEYS + ("ESC",):
+            if self.theme != self.theme_before_settings:
+                self.theme = self.theme_before_settings
+                self.init_styles()
             self.mode = "main"
 
     def help_dialog_key(self, key):
@@ -409,6 +694,14 @@ class RadioInterface:
                     ("~S~ettings...", None, self.open_settings, False, False),
                 ],
             ),
+            (
+                "~T~heme",
+                # Picking a theme keeps the menu open, so you can see it behind the menu
+                [
+                    (theme_label(name), None, lambda n=name: self.set_theme(n), name == self.theme, True)
+                    for name in THEMES
+                ],
+            ),
         ]
 
     def open_menu(self, index):
@@ -444,7 +737,8 @@ class RadioInterface:
         self.settings_field = 0
         default_station = self.config["SETTINGS"]["default_station"]
         self.settings_station = self.stations.index(default_station) if default_station in self.stations else 0
-        self.settings_volume = min(9, max(0, self.config.getint("SETTINGS", "startup_volume", fallback=4)))
+        self.settings_volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
+        self.settings_theme = self.theme_before_settings = self.theme
 
     def quit(self):
         self.running = False
@@ -483,7 +777,13 @@ class RadioInterface:
     def toggle_vu_meter(self):
         self.VU_METER = not self.VU_METER
         self.level_meter.enabled = self.VU_METER
-        self.config.set("SETTINGS", "VU_METER", f"{self.VU_METER}")
+        self.config.set("SETTINGS", "vu_meter", f"{self.VU_METER}")
+        self.save_config()
+
+    def set_theme(self, name):
+        self.theme = name
+        self.init_styles()
+        self.config.set("SETTINGS", "theme", name)
         self.save_config()
 
     def toggle_clock(self):
@@ -492,13 +792,15 @@ class RadioInterface:
         self.save_config()
 
     def save_config(self):
-        with open(SETTINGS_FILE, "w") as configfile:
-            self.config.write(configfile)
+        try:
+            settings.save(self.config)
+        except OSError as e:
+            self.logger.log.error(f"Could not save settings: {e}")
 
     def marquee(self, name, text, width):
         # Returns the part of text to show in width characters. Text that doesn't fit scrolls:
         # it rests at the start, scrolls through, and loops. A new text starts from the beginning.
-        if len(text) <= width:
+        if text_width(text) <= width:
             return text
         now = time.time()
         if self.marquees.get(name, (None,))[0] != text:
@@ -507,7 +809,7 @@ class RadioInterface:
         cycle = MARQUEE_PAUSE + len(loop) / MARQUEE_SPEED
         elapsed = (now - self.marquees[name][1]) % cycle
         offset = max(0, int((elapsed - MARQUEE_PAUSE) * MARQUEE_SPEED))
-        return (loop + loop)[offset : offset + width]
+        return clip((loop + loop)[offset:], width)
 
     ### Drawing primitives ###
 
@@ -517,7 +819,7 @@ class RadioInterface:
         if x < 0:
             text = text[-x:]
             x = 0
-        text = text[: self.cols - x]
+        text = clip(text, self.cols - x)
         try:
             self.stdscr.addstr(y, x, text, self.styles[style])
         except curses.error:
@@ -645,17 +947,27 @@ class RadioInterface:
         number = self.stations.index(self.station) + 1
         self.put(top + 2, label_x, f"Station {number}", "label")
         self.put(top + 2, value_x, self.station, "value")
+        if not self.api.connected and time.time() - self.api.disconnected_since > METADATA_GRACE_SECONDS:
+            badge = " NO SONG INFO "
+            self.put(top + 2, left + w - 3 - len(badge), badge, "warning")
         separator(top + 3)
 
         info = self.api.now_playing.get(self.station, {})
         self.put(top + 4, label_x, "Artist", "label")
-        self.put(top + 4, value_x, self.marquee("artist", info.get("artist", ""), value_width), "value")
+        # Padded with a space on both sides, which shows as a block in themes that give them a background
+        artist = self.marquee("artist", info.get("artist", ""), value_width)
+        if artist:
+            self.put(top + 4, value_x - 1, f" {artist} ", "artist")
         self.put(top + 5, label_x, "Song", "label")
-        self.put(top + 5, value_x, self.marquee("song", info.get("song", ""), value_width), "value")
+        song = self.marquee("song", info.get("song", ""), value_width)
+        if song:
+            self.put(top + 5, value_x - 1, f" {song} ", "song")
 
         self.put(top + 6, label_x, "Played", "label")
         if self.api.audioPlayer.error:
             self.put(top + 6, value_x, " STREAM ERROR ", "error")
+        elif self.api.audioPlayer.reconnecting:
+            self.put(top + 6, value_x, " RECONNECTING ", "warning")
         elif self.api.audioPlayer.no_output or self.api.audioPlayer.stuck:
             self.put(top + 6, value_x, " NO AUDIO OUTPUT ", "error")
         elif "started_at" in info:
@@ -774,7 +1086,7 @@ class RadioInterface:
 
     def draw_settings_dialog(self):
         w = 44
-        h = 9
+        h = 11
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Settings")
@@ -783,6 +1095,7 @@ class RadioInterface:
         fields = [
             ("Default station", f"◄ {self.stations[self.settings_station]:<11} ►"),
             ("Startup volume", f"◄ {'█' * volume}{'░' * (9 - volume)} {volume} ►"),
+            ("Theme", f"◄ {self.settings_theme:<11} ►"),
         ]
         for i, (label, value) in enumerate(fields):
             y = top + 2 + i * 2
@@ -812,7 +1125,7 @@ class RadioInterface:
             if description is None:
                 self.put(y, left + 3, keys, "dialog_value")
             else:
-                self.put(y, left + 5, keys, "menu_hot")
+                self.put(y, left + 5, keys, "dialog_key")
                 self.put(y, left + 19, description, "dialog")
 
         if self.help_scroll > 0:
