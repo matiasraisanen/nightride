@@ -53,6 +53,9 @@ STYLES = {
     "list": ("black", "cyan"),
     "list_sel": ("white", "blue"),
     "button": ("black", "green"),
+    "button_focus": ("white", "green"),
+    "button_cancel": ("lightgray", "red"),
+    "button_cancel_focus": ("white", "red"),
     "button_shadow": ("black", "lightgray"),
     "shadow": ("darkgray", "black"),
 }
@@ -60,21 +63,51 @@ STYLES = {
 # Key hints on the bottom status line, per screen
 STATUS_HINTS = {
     "main": [
-        ("F1", "About"),
-        ("F2", "Stations"),
+        ("F1", "Help"),
+        ("F2", "Browse"),
         ("F10", "Menu"),
         ("←→", "Station"),
-        ("-+", "Volume"),
+        ("↑↓", "Volume"),
         ("Alt-X", "Exit"),
     ],
     "menu": [("←→", "Menus"), ("↑↓", "Select"), ("Enter", "Choose"), ("Esc", "Close")],
-    "stations": [("↑↓", "Move"), ("Enter", "Play"), ("Esc", "Cancel")],
+    "stations": [("↑↓", "Station"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Cancel")],
     "about": [("Enter", "Close")],
+    "help": [("↑↓", "Scroll"), ("Enter", "Close")],
+    "exit": [("←→", "Move"), ("Enter", "Select"), ("Y", "Yes"), ("N", "No"), ("Esc", "Cancel")],
+    "settings": [("↑↓", "Move"), ("←→", "Change"), ("Tab", "Next"), ("Enter", "OK"), ("Esc", "Cancel")],
 }
 
 ENTER_KEYS = ("\n", "\r", "KEY_ENTER")
 
+# Contents of the help dialog: (keys, description) rows, a heading (keys only), or None for a blank line
+HELP = [
+    ("Main screen", None),
+    ("←→  1-9", "Change station"),
+    ("↑↓", "Volume"),
+    ("M", "Mute"),
+    ("V", "VU meter on/off"),
+    ("F2", "Browse stations"),
+    ("F10", "Menus, or Alt + red letter"),
+    ("F1", "This help"),
+    ("Esc", "Exit, asks first"),
+    ("Alt-X  F12", "Exit right away"),
+    None,
+    ("Menus and dialogs", None),
+    ("↑↓  ←→  Tab", "Move"),
+    ("Enter", "Choose"),
+    ("Esc", "Close or cancel"),
+]
+
+# Focusable items in the settings dialog, top to bottom
+SETTINGS_STATION, SETTINGS_VOLUME, SETTINGS_OK, SETTINGS_CANCEL = range(4)
+
 MIN_COLS = 50
+
+# Scrolling of names too long to fit
+MARQUEE_PAUSE = 2.0  # seconds to rest at the start of each loop
+MARQUEE_SPEED = 4.0  # characters per second
+MARQUEE_GAP = "  •  "  # between the end of the text and its start again, marking where the loop ends
 
 
 def hotkey(text):
@@ -108,7 +141,8 @@ class RadioInterface:
         self.VU_METER = self.config.getboolean("SETTINGS", "VU_METER")
         self.level_meter = LevelMeter(loglevel=loglevel, logfile=logfile)
         self.level_meter.enabled = self.VU_METER
-        self.volume = 4
+        self.CLOCK = self.config.getboolean("SETTINGS", "clock", fallback=True)
+        self.volume = min(9, max(0, self.config.getint("SETTINGS", "startup_volume", fallback=4)))
         self.muted = False
         self.api.audioPlayer.set_volume(self.volume)
         self.station = self.config["SETTINGS"]["default_station"]
@@ -121,15 +155,28 @@ class RadioInterface:
         self.menu_item = 0
         self.dialog_sel = 0
         self.dialog_scroll = 0
+        # Browse dialog: whether "Play" has focus (otherwise "Cancel")
+        self.browse_play = True
         self.list_height = 1
         self.menu_x = []
+        # Scrolling texts: name => (text, when it started scrolling)
+        self.marquees = {}
+        # Settings dialog: the focused field (see SETTINGS_* below), and the values being edited
+        self.settings_field = 0
+        self.settings_station = 0
+        self.settings_volume = 0
+        # Exit dialog: whether "Yes" has focus
+        self.exit_yes = True
+        # Help dialog: first visible line, and how many lines fit
+        self.help_scroll = 0
+        self.help_height = len(HELP)
 
         try:
             curses.wrapper(self.main)
         except Exception as e:
             print("An error caused the program to crash. See radio.log for details")
             self.logger.log.exception(e)
-        self.api.audioPlayer.stop()
+        self.api.audioPlayer.shutdown()
 
     def main(self, stdscr):
         self.stdscr = stdscr
@@ -192,6 +239,12 @@ class RadioInterface:
             self.menu_key(key)
         elif self.mode == "stations":
             self.station_dialog_key(key)
+        elif self.mode == "settings":
+            self.settings_dialog_key(key)
+        elif self.mode == "exit":
+            self.exit_dialog_key(key)
+        elif self.mode == "help":
+            self.help_dialog_key(key)
         elif self.mode == "about":
             if key in ENTER_KEYS + ("ESC", " ", "KEY_F(1)"):
                 self.mode = "main"
@@ -205,20 +258,23 @@ class RadioInterface:
             self.step_station(-1)
         elif key == "KEY_RIGHT":
             self.step_station(1)
-        elif key in ("+", "="):
+        elif key in ("KEY_UP", "+", "="):
             self.volume_up()
-        elif key == "-":
+        elif key in ("KEY_DOWN", "-"):
             self.volume_down()
         elif key == "v":
             self.toggle_vu_meter()
         elif key == "m":
             self.toggle_mute()
         elif key == "KEY_F(1)":
-            self.open_about()
+            self.open_help()
         elif key == "KEY_F(2)":
             self.open_station_dialog()
         elif key == "KEY_F(10)":
             self.open_menu(0)
+        elif key == "ESC":
+            self.mode = "exit"
+            self.exit_yes = True
         elif key.startswith("ALT_"):
             self.open_menu_by_hotkey(key[-1])
 
@@ -244,14 +300,21 @@ class RadioInterface:
         elif key.startswith("ALT_"):
             self.open_menu_by_hotkey(key[-1])
         elif len(key) == 1:
-            for item in items:
+            for i, item in enumerate(items):
                 if item is not None and hotkey(item[0]) == key.lower():
+                    self.menu_item = i
                     self.run_menu_item(item)
                     break
 
     def station_dialog_key(self, key):
         last = len(self.stations) - 1
-        if key == "KEY_UP":
+        list_keys = ("KEY_UP", "KEY_DOWN", "KEY_PPAGE", "KEY_NPAGE", "KEY_HOME", "KEY_END")
+        if key in list_keys or key.isdigit():
+            # Picking a station puts the focus back on Play, so Enter never cancels by surprise
+            self.browse_play = True
+        if key in ("KEY_LEFT", "KEY_RIGHT", "\t", "KEY_BTAB"):
+            self.browse_play = not self.browse_play
+        elif key == "KEY_UP":
             self.dialog_sel = max(0, self.dialog_sel - 1)
         elif key == "KEY_DOWN":
             self.dialog_sel = min(last, self.dialog_sel + 1)
@@ -265,45 +328,87 @@ class RadioInterface:
             self.dialog_sel = last
         elif key.isdigit() and 1 <= int(key) <= len(self.stations):
             self.dialog_sel = int(key) - 1
-        elif key in ENTER_KEYS:
+        elif key in ENTER_KEYS and self.browse_play:
             self.logger.log.debug(f"User selected station {self.stations[self.dialog_sel]} via F2")
             self.set_station(self.stations[self.dialog_sel])
             self.mode = "main"
-        elif key in ("ESC", "KEY_F(2)"):
+        elif key in ENTER_KEYS + ("ESC", "KEY_F(2)"):
+            self.mode = "main"
+
+    def settings_dialog_key(self, key):
+        field = self.settings_field
+        on_buttons = field in (SETTINGS_OK, SETTINGS_CANCEL)
+        if key == "KEY_DOWN":
+            # The buttons are one row: going down from the last field lands on OK
+            self.settings_field = field if on_buttons else field + 1
+        elif key == "KEY_UP":
+            self.settings_field = SETTINGS_VOLUME if on_buttons else max(SETTINGS_STATION, field - 1)
+        elif key in ("\t", "KEY_BTAB"):
+            step = 1 if key == "\t" else -1
+            self.settings_field = (field + step) % 4
+        elif key in ("KEY_LEFT", "KEY_RIGHT"):
+            step = -1 if key == "KEY_LEFT" else 1
+            if field == SETTINGS_STATION:
+                self.settings_station = (self.settings_station + step) % len(self.stations)
+            elif field == SETTINGS_VOLUME:
+                self.settings_volume = min(9, max(0, self.settings_volume + step))
+            else:
+                self.settings_field = SETTINGS_CANCEL if field == SETTINGS_OK else SETTINGS_OK
+        elif key in ENTER_KEYS and field != SETTINGS_CANCEL:
+            self.config.set("SETTINGS", "default_station", self.stations[self.settings_station])
+            self.config.set("SETTINGS", "startup_volume", str(self.settings_volume))
+            self.save_config()
+            self.mode = "main"
+        elif key in ENTER_KEYS + ("ESC",):
+            self.mode = "main"
+
+    def help_dialog_key(self, key):
+        last = max(0, len(HELP) - self.help_height)
+        if key in ("KEY_UP", "KEY_PPAGE"):
+            step = 1 if key == "KEY_UP" else self.help_height
+            self.help_scroll = max(0, self.help_scroll - step)
+        elif key in ("KEY_DOWN", "KEY_NPAGE"):
+            step = 1 if key == "KEY_DOWN" else self.help_height
+            self.help_scroll = min(last, self.help_scroll + step)
+        elif key in ENTER_KEYS + ("ESC", " ", "KEY_F(1)"):
+            self.mode = "main"
+
+    def exit_dialog_key(self, key):
+        if key in ("KEY_LEFT", "KEY_RIGHT", "\t", "KEY_BTAB"):
+            self.exit_yes = not self.exit_yes
+        elif key in ("y", "Y") or (key in ENTER_KEYS and self.exit_yes):
+            self.running = False
+        elif key in ("n", "N", "ESC") or key in ENTER_KEYS:
             self.mode = "main"
 
     ### Actions ###
 
     def menus(self):
-        # Each menu is (title, items). An item is (label, shortcut, action, checked), or None for a separator.
-        station_items = []
-        for i, station in enumerate(self.stations):
-            label = f"~{i + 1}~ {station}" if i < 9 else f"   {station}"
-            station_items.append(
-                (label, None, lambda s=station: self.set_station(s), station == self.station)
-            )
-        station_items += [None, ("~B~rowse...", "F2", self.open_station_dialog, False)]
-
+        # Each menu is (title, items). An item is (label, shortcut, action, checked, toggle), or None for a separator.
+        # Choosing a toggle item keeps the menu open, so you can see its check mark change.
         return [
             (
                 "~R~adio",
                 [
-                    ("~M~ute", "M", self.toggle_mute, self.muted),
+                    ("~B~rowse stations...", "F2", self.open_station_dialog, False, False),
                     None,
-                    ("E~x~it", "Alt-X", self.quit, False),
+                    ("~H~elp...", "F1", self.open_help, False, False),
+                    ("~A~bout...", None, self.open_about, False, False),
+                    None,
+                    ("E~x~it", "Alt-X", self.quit, False, False),
                 ],
             ),
-            ("~S~tation", station_items),
             (
                 "~O~ptions",
                 [
-                    ("Volume ~u~p", "+", self.volume_up, False),
-                    ("Volume ~d~own", "-", self.volume_down, False),
+                    ("~M~ute", "M", self.toggle_mute, self.muted, True),
                     None,
-                    ("~V~U meter", "V", self.toggle_vu_meter, self.VU_METER),
+                    ("~V~U meter", "V", self.toggle_vu_meter, self.VU_METER, True),
+                    ("~C~lock", None, self.toggle_clock, self.CLOCK, True),
+                    None,
+                    ("~S~ettings...", None, self.open_settings, False, False),
                 ],
             ),
-            ("~H~elp", [("~A~bout...", "F1", self.open_about, False)]),
         ]
 
     def open_menu(self, index):
@@ -317,16 +422,29 @@ class RadioInterface:
                 self.open_menu(i)
 
     def run_menu_item(self, item):
-        label, shortcut, action, checked = item
-        self.mode = "main"
+        label, shortcut, action, checked, toggle = item
+        if not toggle:
+            self.mode = "main"
         action()
 
     def open_about(self):
         self.mode = "about"
 
+    def open_help(self):
+        self.mode = "help"
+        self.help_scroll = 0
+
     def open_station_dialog(self):
         self.mode = "stations"
         self.dialog_sel = self.stations.index(self.station)
+        self.browse_play = True
+
+    def open_settings(self):
+        self.mode = "settings"
+        self.settings_field = 0
+        default_station = self.config["SETTINGS"]["default_station"]
+        self.settings_station = self.stations.index(default_station) if default_station in self.stations else 0
+        self.settings_volume = min(9, max(0, self.config.getint("SETTINGS", "startup_volume", fallback=4)))
 
     def quit(self):
         self.running = False
@@ -368,14 +486,28 @@ class RadioInterface:
         self.config.set("SETTINGS", "VU_METER", f"{self.VU_METER}")
         self.save_config()
 
+    def toggle_clock(self):
+        self.CLOCK = not self.CLOCK
+        self.config.set("SETTINGS", "clock", f"{self.CLOCK}")
+        self.save_config()
+
     def save_config(self):
         with open(SETTINGS_FILE, "w") as configfile:
             self.config.write(configfile)
 
-    def shorten(self, word, max_length=29):
-        if len(word) > max_length:
-            word = word[: max_length - 3] + "..."
-        return word
+    def marquee(self, name, text, width):
+        # Returns the part of text to show in width characters. Text that doesn't fit scrolls:
+        # it rests at the start, scrolls through, and loops. A new text starts from the beginning.
+        if len(text) <= width:
+            return text
+        now = time.time()
+        if self.marquees.get(name, (None,))[0] != text:
+            self.marquees[name] = (text, now)
+        loop = text + MARQUEE_GAP
+        cycle = MARQUEE_PAUSE + len(loop) / MARQUEE_SPEED
+        elapsed = (now - self.marquees[name][1]) % cycle
+        offset = max(0, int((elapsed - MARQUEE_PAUSE) * MARQUEE_SPEED))
+        return (loop + loop)[offset : offset + width]
 
     ### Drawing primitives ###
 
@@ -422,8 +554,14 @@ class RadioInterface:
         self.fill(y, x, h, w, body_style)
         self.box(y, x, h, w, border_style, double, title, title_style)
 
-    def button(self, y, x, label):
-        self.put(y, x, label, "button")
+    def button(self, y, x, label, focused=False, cancel=False):
+        # Cancel buttons are red, others green
+        style = "button_cancel" if cancel else "button"
+        if focused:
+            # Mark the focused button with arrows, keeping its width
+            label = "►" + label[1:-1] + "◄"
+            style += "_focus"
+        self.put(y, x, label, style)
         self.put(y, x + len(label), "▄", "button_shadow")
         self.put(y + 1, x + 1, "▀" * len(label), "button_shadow")
 
@@ -452,6 +590,12 @@ class RadioInterface:
             self.draw_station_dialog()
         elif self.mode == "about":
             self.draw_about_dialog()
+        elif self.mode == "settings":
+            self.draw_settings_dialog()
+        elif self.mode == "exit":
+            self.draw_exit_dialog()
+        elif self.mode == "help":
+            self.draw_help_dialog()
         self.stdscr.refresh()
 
     def draw_menu_bar(self):
@@ -464,8 +608,9 @@ class RadioInterface:
             self.put_marked(0, x, f" {title} ", style, hot_style)
             self.menu_x.append(x)
             x += visible_len(title) + 2
-        clock = time.strftime("%H:%M:%S")
-        self.put(0, self.cols - len(clock) - 2, clock, "menu")
+        if self.CLOCK:
+            clock = time.strftime("%H:%M:%S")
+            self.put(0, self.cols - len(clock) - 2, clock, "menu")
 
     def draw_status_line(self):
         y = self.rows - 1
@@ -498,20 +643,21 @@ class RadioInterface:
             self.put(y, left, "╟" + "─" * (w - 2) + "╢", "window_border")
 
         number = self.stations.index(self.station) + 1
-        self.put(top + 2, label_x, "Station", "label")
-        self.put(top + 2, value_x, str(number), "number")
-        self.put(top + 2, value_x + 3, self.station, "value")
+        self.put(top + 2, label_x, f"Station {number}", "label")
+        self.put(top + 2, value_x, self.station, "value")
         separator(top + 3)
 
         info = self.api.now_playing.get(self.station, {})
         self.put(top + 4, label_x, "Artist", "label")
-        self.put(top + 4, value_x, self.shorten(info.get("artist", ""), value_width), "value")
+        self.put(top + 4, value_x, self.marquee("artist", info.get("artist", ""), value_width), "value")
         self.put(top + 5, label_x, "Song", "label")
-        self.put(top + 5, value_x, self.shorten(info.get("song", ""), value_width), "value")
+        self.put(top + 5, value_x, self.marquee("song", info.get("song", ""), value_width), "value")
 
         self.put(top + 6, label_x, "Played", "label")
         if self.api.audioPlayer.error:
             self.put(top + 6, value_x, " STREAM ERROR ", "error")
+        elif self.api.audioPlayer.no_output or self.api.audioPlayer.stuck:
+            self.put(top + 6, value_x, " NO AUDIO OUTPUT ", "error")
         elif "started_at" in info:
             seconds = max(0, int(time.time() - info["started_at"]))
             minutes, seconds = divmod(seconds, 60)
@@ -526,7 +672,7 @@ class RadioInterface:
         self.put(top + 8, value_x + 1, "█" * self.volume, "bar_full")
         self.put(top + 8, value_x + 1 + self.volume, "░" * (9 - self.volume), "bar_empty")
         self.put(top + 8, value_x + 10, "►", "label")
-        if self.muted:
+        if self.muted or self.volume == 0:
             self.put(top + 8, value_x + 12, " MUTED ", "error")
         else:
             self.put(top + 8, value_x + 12, str(self.volume), "number")
@@ -567,7 +713,7 @@ class RadioInterface:
             if item is None:
                 self.put(row, x, "├" + "─" * (w - 2) + "┤", "menu")
                 continue
-            label, shortcut, action, checked = item
+            label, shortcut, action, checked, toggle = item
             selected = i == self.menu_item
             style, hot_style = ("menu_sel", "menu_sel_hot") if selected else ("menu", "menu_hot")
             self.fill(row, x + 1, 1, w - 2, style)
@@ -584,7 +730,7 @@ class RadioInterface:
         h = self.list_height + 9
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
-        self.window(top, left, h, w, "dialog", "dialog_border", "Stations")
+        self.window(top, left, h, w, "dialog", "dialog_border", "Browse")
 
         # Keep the selection visible in the list
         if self.dialog_sel < self.dialog_scroll:
@@ -618,13 +764,75 @@ class RadioInterface:
         info = self.api.now_playing.get(self.stations[self.dialog_sel], {})
         info_y = top + self.list_height + 3
         self.put(info_y, left + 3, "Artist", "dialog")
-        self.put(info_y, left + 11, self.shorten(info.get("artist", ""), w - 14), "dialog_value")
+        self.put(info_y, left + 11, self.marquee("browse_artist", info.get("artist", ""), w - 14), "dialog_value")
         self.put(info_y + 1, left + 3, "Song", "dialog")
-        self.put(info_y + 1, left + 11, self.shorten(info.get("song", ""), w - 14), "dialog_value")
+        self.put(info_y + 1, left + 11, self.marquee("browse_song", info.get("song", ""), w - 14), "dialog_value")
 
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, "   OK   ")
-        self.button(buttons_y, left + w // 2 + 3, " Cancel ")
+        self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.browse_play)
+        self.button(buttons_y, left + w // 2 + 3, " Cancel ", not self.browse_play, cancel=True)
+
+    def draw_settings_dialog(self):
+        w = 44
+        h = 9
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Settings")
+
+        volume = self.settings_volume
+        fields = [
+            ("Default station", f"◄ {self.stations[self.settings_station]:<11} ►"),
+            ("Startup volume", f"◄ {'█' * volume}{'░' * (9 - volume)} {volume} ►"),
+        ]
+        for i, (label, value) in enumerate(fields):
+            y = top + 2 + i * 2
+            self.put(y, left + 3, label, "dialog")
+            self.put(y, left + 21, f" {value} ", "list_sel" if i == self.settings_field else "list")
+
+        buttons_y = top + h - 3
+        self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.settings_field == SETTINGS_OK)
+        self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.settings_field == SETTINGS_CANCEL, cancel=True)
+
+    def draw_help_dialog(self):
+        w = 48
+        # Shrink to fit short terminals, and scroll what doesn't fit
+        self.help_height = max(1, min(len(HELP), self.rows - 9))
+        self.help_scroll = min(self.help_scroll, len(HELP) - self.help_height)
+        h = self.help_height + 6
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Help")
+
+        for row in range(self.help_height):
+            line = HELP[self.help_scroll + row]
+            y = top + 2 + row
+            if line is None:
+                continue
+            keys, description = line
+            if description is None:
+                self.put(y, left + 3, keys, "dialog_value")
+            else:
+                self.put(y, left + 5, keys, "menu_hot")
+                self.put(y, left + 19, description, "dialog")
+
+        if self.help_scroll > 0:
+            self.put(top + 2, left + w - 1, "▲", "dialog_border")
+        if self.help_scroll + self.help_height < len(HELP):
+            self.put(top + 1 + self.help_height, left + w - 1, "▼", "dialog_border")
+        self.button(top + h - 3, left + (w - 8) // 2, "   OK   ", True)
+
+    def draw_exit_dialog(self):
+        w = 34
+        h = 8
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Exit")
+
+        question = "Quit Nightride FM?"
+        self.put(top + 2, left + (w - len(question)) // 2, question, "dialog")
+        buttons_y = top + h - 3
+        self.button(buttons_y, left + w // 2 - 11, "  Yes   ", self.exit_yes)
+        self.button(buttons_y, left + w // 2 + 2, "   No   ", not self.exit_yes, cancel=True)
 
     def draw_about_dialog(self):
         w = 44

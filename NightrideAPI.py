@@ -152,4 +152,4 @@ if __name__ == "__main__":
     try:
         nightRide.start()
     except KeyboardInterrupt:
-        nightRide.audioPlayer.stop()
+        nightRide.audioPlayer.shutdown()

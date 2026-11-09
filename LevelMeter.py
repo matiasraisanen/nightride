@@ -1,12 +1,11 @@
 import array
-import json
 import logging
 import math
-import os
 import shutil
 import subprocess
 import threading
 import time
+import audio_streams
 from logger import Logger
 from paths import LOG_FILE
 
@@ -17,11 +16,6 @@ FLOOR_DB = -40.0  # Level shown as an empty meter
 CEILING_DB = 0.0  # Level shown as a full meter
 DECAY_DB_PER_SECOND = 24.0
 PEAK_HOLD_SECONDS = 1.5
-
-
-def parse_db(text):
-    # pactl reports volumes like "-39.45 dB" or "-inf dB"
-    return float(text.split()[0])
 
 
 class LevelMeter:
@@ -48,7 +42,7 @@ class LevelMeter:
         self.peak_times = [0.0, 0.0]
         self.updated = 0.0
 
-        self.available = bool(shutil.which("parec") and shutil.which("pactl"))
+        self.available = bool(shutil.which("parec") and audio_streams.available())
         if not self.available:
             self.logger.log.warning("parec or pactl not found. VU meter is not available.")
             return
@@ -81,30 +75,10 @@ class LevelMeter:
     def find_stream(self):
         # Returns (sink input index, volume in dB) of our own audio stream, or None
         try:
-            result = subprocess.run(
-                ["pactl", "-f", "json", "list", "sink-inputs"],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-            streams = json.loads(result.stdout)
-        except (subprocess.SubprocessError, ValueError) as e:
+            return audio_streams.find_own_stream()
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
             self.logger.log.debug(f"Could not list audio streams: {e}")
             return None
-
-        mine = [
-            stream
-            for stream in streams
-            if stream["properties"].get("application.process.id") == str(os.getpid())
-        ]
-        if not mine:
-            return None
-        # When switching stations there may briefly be two. The newest one is playing.
-        stream = max(mine, key=lambda s: s["index"])
-        gain_db = min(parse_db(channel["db"]) for channel in stream["volume"].values())
-        if stream["mute"]:
-            gain_db = -math.inf
-        return stream["index"], gain_db
 
     def record(self, index, gain_db):
         self.logger.log.debug(f"Recording audio stream {index} for the VU meter")
