@@ -1,62 +1,71 @@
-import curses
 import logging
 import time
-import unicodedata
+
+import blessed
 
 import settings
 from logger import Logger
 from paths import LOG_FILE
+from screen import Screen, clip, text_width
 
 from LevelMeter import CEILING_DB, FLOOR_DB, LevelMeter
 from NightrideAPI import NightRideAPI
 
-# Colours as (closest xterm-256 colour, basic curses colour, bright). Most are the 16 colours of the VGA
-# text mode palette. On 256-colour terminals the exact xterm colours are used, so the look doesn't depend
-# on the terminal's theme.
+# Colours by name. The first 16 are the VGA text mode palette. Terminals with true colour show these
+# exactly. On others, blessed picks the closest colour they have.
 COLORS = {
-    "black": (16, curses.COLOR_BLACK, False),
-    "blue": (19, curses.COLOR_BLUE, False),
-    "green": (34, curses.COLOR_GREEN, False),
-    "cyan": (37, curses.COLOR_CYAN, False),
-    "red": (124, curses.COLOR_RED, False),
-    "magenta": (127, curses.COLOR_MAGENTA, False),
-    "lightgray": (248, curses.COLOR_WHITE, False),
-    "darkgray": (240, curses.COLOR_BLACK, True),
-    "lightblue": (63, curses.COLOR_BLUE, True),
-    "lightgreen": (83, curses.COLOR_GREEN, True),
-    "lightcyan": (87, curses.COLOR_CYAN, True),
-    "lightred": (203, curses.COLOR_RED, True),
-    "lightmagenta": (207, curses.COLOR_MAGENTA, True),
-    "yellow": (227, curses.COLOR_YELLOW, True),
-    "white": (231, curses.COLOR_WHITE, True),
+    "black": "#000000",
+    "blue": "#0000aa",
+    "green": "#00aa00",
+    "cyan": "#00aaaa",
+    "red": "#aa0000",
+    "magenta": "#aa00aa",
+    "lightgray": "#aaaaaa",
+    "darkgray": "#555555",
+    "lightblue": "#5555ff",
+    "lightgreen": "#55ff55",
+    "lightcyan": "#55ffff",
+    "lightred": "#ff5555",
+    "lightmagenta": "#ff55ff",
+    "yellow": "#ffff55",
+    "white": "#ffffff",
     # Not in the VGA palette, for the other themes
-    "purple": (54, curses.COLOR_MAGENTA, False),
-    "darkpurple": (53, curses.COLOR_MAGENTA, False),
-    "charcoal": (236, curses.COLOR_BLACK, False),
-    "darkcharcoal": (235, curses.COLOR_BLACK, False),
-    "nearblack": (233, curses.COLOR_BLACK, False),
-    "slate": (238, curses.COLOR_BLACK, True),
-    "gray": (245, curses.COLOR_WHITE, False),
-    "pale": (252, curses.COLOR_WHITE, True),
-    "navy": (17, curses.COLOR_BLUE, False),
-    "orange": (208, curses.COLOR_YELLOW, False),
-    "hotpink": (198, curses.COLOR_MAGENTA, True),
-    "pink": (205, curses.COLOR_MAGENTA, True),
-    "lightpink": (213, curses.COLOR_MAGENTA, True),
-    "brightred": (196, curses.COLOR_RED, True),
-    "blood": (160, curses.COLOR_RED, False),
-    "darkred": (88, curses.COLOR_RED, False),
-    "deepred": (52, curses.COLOR_RED, False),
-    "amberbright": (220, curses.COLOR_YELLOW, True),
-    "amber": (214, curses.COLOR_YELLOW, True),
-    "amberdim": (172, curses.COLOR_YELLOW, False),
-    "amberdark": (94, curses.COLOR_YELLOW, False),
-    "greenbright": (120, curses.COLOR_GREEN, True),
-    "greendark": (22, curses.COLOR_GREEN, False),
-    "c64dark": (55, curses.COLOR_BLUE, False),
-    "c64light": (104, curses.COLOR_CYAN, False),
-    "c64mid": (61, curses.COLOR_BLUE, True),
+    "purple": "#5f0087",
+    "darkpurple": "#5f005f",
+    "charcoal": "#303030",
+    "darkcharcoal": "#262626",
+    "nearblack": "#121212",
+    "slate": "#444444",
+    "gray": "#8a8a8a",
+    "pale": "#d0d0d0",
+    "navy": "#00005f",
+    "orange": "#ff8700",
+    "hotpink": "#ff0087",
+    "pink": "#ff5faf",
+    "lightpink": "#ff87ff",
+    "brightred": "#ff0000",
+    "blood": "#d70000",
+    "darkred": "#870000",
+    "deepred": "#5f0000",
+    "amberbright": "#ffd700",
+    "amber": "#ffaf00",
+    "amberdim": "#d78700",
+    "amberdark": "#875f00",
+    "greenbright": "#87ff87",
+    "greendark": "#005f00",
+    # The Commodore 64's blues, from the Colodore palette. Its light blue is too dim for text on the
+    # dark blue, so text uses a brighter one.
+    "c64dark": "#2e2c9b",
+    "c64border": "#706deb",
+    "c64light": "#a5a2f7",
+    "c64mid": "#4a47c2",
 }
+
+
+def rgb(color):
+    # "#rrggbb" => (r, g, b)
+    return tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
+
 
 # Style name => (foreground, background), per theme. A third value "underline" underlines the text.
 DOS_THEME = {
@@ -206,9 +215,9 @@ DARKSYNTH_THEME = {
 # Light blue on dark blue inside a light blue border, like the Commodore 64 start screen
 C64_THEME = {
     **DOS_THEME,
-    "desktop": ("c64light", "c64light"),
-    "menu": ("c64dark", "c64light"),
-    "menu_hot": ("c64dark", "c64light", "underline"),
+    "desktop": ("c64border", "c64border"),
+    "menu": ("white", "c64border"),
+    "menu_hot": ("white", "c64border", "underline"),
     "menu_sel": ("c64light", "c64dark"),
     "menu_sel_hot": ("white", "c64dark"),
     "window": ("c64light", "c64dark"),
@@ -334,9 +343,14 @@ HELP = [
 ]
 
 # Focusable items in the settings dialog, top to bottom
-SETTINGS_STATION, SETTINGS_VOLUME, SETTINGS_THEME, SETTINGS_OK, SETTINGS_CANCEL = range(5)
+SETTINGS_STATION, SETTINGS_THEME, SETTINGS_VOLUME, SETTINGS_OK, SETTINGS_CANCEL = range(5)
 
 MIN_COLS = 50
+
+# The screen is redrawn this often
+FRAME_SECONDS = 0.05
+# How long to wait after Esc to tell a lone Esc from the start of a longer key sequence
+ESC_DELAY_SECONDS = 0.05
 
 # How long the metadata stream may be disconnected before the song info is marked as missing
 METADATA_GRACE_SECONDS = 10
@@ -361,27 +375,6 @@ def theme_label(name):
 
 def visible_len(text):
     return len(text.replace("~", ""))
-
-
-def char_width(c):
-    # Japanese and other wide characters take two terminal columns, combining marks none
-    if unicodedata.combining(c):
-        return 0
-    return 2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
-
-
-def text_width(text):
-    return sum(char_width(c) for c in text)
-
-
-def clip(text, width):
-    # The longest start of text that fits in width columns
-    used = 0
-    for i, c in enumerate(text):
-        used += char_width(c)
-        if used > width:
-            return text[:i]
-    return text
 
 
 class RadioInterface:
@@ -444,72 +437,52 @@ class RadioInterface:
         self.help_scroll = 0
         self.help_height = len(HELP)
 
+        self.term = blessed.Terminal()
+        self.screen = Screen(self.term)
         try:
-            curses.wrapper(self.main)
+            with self.term.fullscreen(), self.term.cbreak(), self.term.hidden_cursor():
+                self.main()
+        except KeyboardInterrupt:
+            # Ctrl-C quits like Alt-X
+            pass
         except Exception as e:
             print("An error caused the program to crash. See radio.log for details")
             self.logger.log.exception(e)
         self.api.audioPlayer.shutdown()
 
-    def main(self, stdscr):
-        self.stdscr = stdscr
-        try:
-            curses.curs_set(0)
-        except curses.error:
-            pass
-        # Alt+key arrives as Escape followed by the key. Don't wait long to tell the two apart.
-        curses.set_escdelay(25)
-        stdscr.nodelay(True)
-        stdscr.keypad(True)
-        curses.start_color()
+    def main(self):
         self.init_styles()
-
         self.set_station(self.station)
         while self.running:
             self.read_keys()
             self.draw()
-            time.sleep(0.05)
 
     def init_styles(self):
-        # Called again when the theme changes. Redefining the colour pairs recolours the screen.
-        self.styles = {}
-        for pair, (name, (fg, bg, *flags)) in enumerate(THEMES[self.theme].items(), start=1):
-            fg_256, fg_basic, fg_bright = COLORS[fg]
-            bg_256, bg_basic, _ = COLORS[bg]
-            attr = 0
-            if curses.COLORS >= 256:
-                curses.init_pair(pair, fg_256, bg_256)
-            elif curses.COLORS >= 16:
-                curses.init_pair(pair, fg_basic + 8 if fg_bright else fg_basic, bg_basic)
-            else:
-                curses.init_pair(pair, fg_basic, bg_basic)
-                attr = curses.A_BOLD if fg_bright else 0
+        # Called again when the theme changes
+        term = self.term
+        for name, (fg, bg, *flags) in THEMES[self.theme].items():
+            style = term.color_rgb(*rgb(COLORS[fg])) + term.on_color_rgb(*rgb(COLORS[bg]))
             if "underline" in flags:
-                attr |= curses.A_UNDERLINE
-            self.styles[name] = curses.color_pair(pair) | attr
+                style += term.underline
+            self.screen.styles[name] = style
+        self.screen.invalidate()
 
     ### Input ###
 
     def read_keys(self):
-        while True:
-            try:
-                key = self.stdscr.getkey()
-            except curses.error:
-                # No more input
-                return
-            if key == "\x1b":
-                try:
-                    next_key = self.stdscr.getkey()
-                except curses.error:
-                    next_key = ""
-                key = f"ALT_{next_key.lower()}" if len(next_key) == 1 else "ESC"
-            self.logger.log.debug(f"User pressed key {key!r}")
-            self.handle_key(key)
+        # Wait up to one frame for a key, then take any others that are waiting.
+        # Keys are named the way blessed names them ("KEY_UP", "KEY_F1"), or are the character typed.
+        key = self.term.inkey(timeout=FRAME_SECONDS, esc_delay=ESC_DELAY_SECONDS)
+        while key:
+            name = key.name if key.is_sequence else str(key)
+            if name and name.startswith("KEY_ALT_") and len(name) == len("KEY_ALT_") + 1:
+                name = f"ALT_{name[-1].lower()}"
+            self.logger.log.debug(f"User pressed key {name!r}")
+            self.handle_key(name)
+            key = self.term.inkey(timeout=0, esc_delay=ESC_DELAY_SECONDS)
 
     def handle_key(self, key):
-        if key == "KEY_RESIZE":
-            self.stdscr.clear()
-        elif key in ("KEY_F(12)", "ALT_x"):
+        if key in ("KEY_F12", "ALT_x"):
             self.running = False
         elif self.mode == "menu":
             self.menu_key(key)
@@ -522,7 +495,7 @@ class RadioInterface:
         elif self.mode == "help":
             self.help_dialog_key(key)
         elif self.mode == "about":
-            if key in ENTER_KEYS + ("ESC", " ", "KEY_F(1)"):
+            if key in ENTER_KEYS + ("KEY_ESCAPE", " ", "KEY_F1"):
                 self.mode = "main"
         else:
             self.main_key(key)
@@ -542,13 +515,13 @@ class RadioInterface:
             self.toggle_vu_meter()
         elif key == "m":
             self.toggle_mute()
-        elif key == "KEY_F(1)":
+        elif key == "KEY_F1":
             self.open_help()
-        elif key == "KEY_F(2)":
+        elif key == "KEY_F2":
             self.open_station_dialog()
-        elif key == "KEY_F(10)":
+        elif key == "KEY_F10":
             self.open_menu(0)
-        elif key == "ESC":
+        elif key == "KEY_ESCAPE":
             self.mode = "exit"
             self.exit_yes = True
         elif key.startswith("ALT_"):
@@ -557,7 +530,7 @@ class RadioInterface:
     def menu_key(self, key):
         menus = self.menus()
         items = menus[self.menu_index][1]
-        if key in ("ESC", "KEY_F(10)"):
+        if key in ("KEY_ESCAPE", "KEY_F10"):
             self.mode = "main"
         elif key in ("KEY_LEFT", "KEY_RIGHT"):
             step = -1 if key == "KEY_LEFT" else 1
@@ -584,19 +557,19 @@ class RadioInterface:
 
     def station_dialog_key(self, key):
         last = len(self.stations) - 1
-        list_keys = ("KEY_UP", "KEY_DOWN", "KEY_PPAGE", "KEY_NPAGE", "KEY_HOME", "KEY_END")
+        list_keys = ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END")
         if key in list_keys or key.isdigit():
             # Picking a station puts the focus back on Play, so Enter never cancels by surprise
             self.browse_play = True
-        if key in ("KEY_LEFT", "KEY_RIGHT", "\t", "KEY_BTAB"):
+        if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
             self.browse_play = not self.browse_play
         elif key == "KEY_UP":
             self.dialog_sel = max(0, self.dialog_sel - 1)
         elif key == "KEY_DOWN":
             self.dialog_sel = min(last, self.dialog_sel + 1)
-        elif key == "KEY_PPAGE":
+        elif key == "KEY_PGUP":
             self.dialog_sel = max(0, self.dialog_sel - self.list_height)
-        elif key == "KEY_NPAGE":
+        elif key == "KEY_PGDOWN":
             self.dialog_sel = min(last, self.dialog_sel + self.list_height)
         elif key == "KEY_HOME":
             self.dialog_sel = 0
@@ -608,7 +581,7 @@ class RadioInterface:
             self.logger.log.debug(f"User selected station {self.stations[self.dialog_sel]} via F2")
             self.set_station(self.stations[self.dialog_sel])
             self.mode = "main"
-        elif key in ENTER_KEYS + ("ESC", "KEY_F(2)"):
+        elif key in ENTER_KEYS + ("KEY_ESCAPE", "KEY_F2"):
             self.mode = "main"
 
     def settings_dialog_key(self, key):
@@ -618,9 +591,9 @@ class RadioInterface:
             # The buttons are one row: going down from the last field lands on OK
             self.settings_field = field if on_buttons else field + 1
         elif key == "KEY_UP":
-            self.settings_field = SETTINGS_THEME if on_buttons else max(SETTINGS_STATION, field - 1)
-        elif key in ("\t", "KEY_BTAB"):
-            step = 1 if key == "\t" else -1
+            self.settings_field = SETTINGS_VOLUME if on_buttons else max(SETTINGS_STATION, field - 1)
+        elif key in ("KEY_TAB", "KEY_BTAB"):
+            step = 1 if key == "KEY_TAB" else -1
             self.settings_field = (field + step) % 5
         elif key in ("KEY_LEFT", "KEY_RIGHT"):
             step = -1 if key == "KEY_LEFT" else 1
@@ -641,7 +614,7 @@ class RadioInterface:
             self.config.set("SETTINGS", "startup_volume", str(self.settings_volume))
             self.set_theme(self.settings_theme)
             self.mode = "main"
-        elif key in ENTER_KEYS + ("ESC",):
+        elif key in ENTER_KEYS + ("KEY_ESCAPE",):
             if self.theme != self.theme_before_settings:
                 self.theme = self.theme_before_settings
                 self.init_styles()
@@ -649,21 +622,21 @@ class RadioInterface:
 
     def help_dialog_key(self, key):
         last = max(0, len(HELP) - self.help_height)
-        if key in ("KEY_UP", "KEY_PPAGE"):
+        if key in ("KEY_UP", "KEY_PGUP"):
             step = 1 if key == "KEY_UP" else self.help_height
             self.help_scroll = max(0, self.help_scroll - step)
-        elif key in ("KEY_DOWN", "KEY_NPAGE"):
+        elif key in ("KEY_DOWN", "KEY_PGDOWN"):
             step = 1 if key == "KEY_DOWN" else self.help_height
             self.help_scroll = min(last, self.help_scroll + step)
-        elif key in ENTER_KEYS + ("ESC", " ", "KEY_F(1)"):
+        elif key in ENTER_KEYS + ("KEY_ESCAPE", " ", "KEY_F1"):
             self.mode = "main"
 
     def exit_dialog_key(self, key):
-        if key in ("KEY_LEFT", "KEY_RIGHT", "\t", "KEY_BTAB"):
+        if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
             self.exit_yes = not self.exit_yes
         elif key in ("y", "Y") or (key in ENTER_KEYS and self.exit_yes):
             self.running = False
-        elif key in ("n", "N", "ESC") or key in ENTER_KEYS:
+        elif key in ("n", "N", "KEY_ESCAPE") or key in ENTER_KEYS:
             self.mode = "main"
 
     ### Actions ###
@@ -814,17 +787,7 @@ class RadioInterface:
     ### Drawing primitives ###
 
     def put(self, y, x, text, style):
-        if y < 0 or y >= self.rows or x >= self.cols:
-            return
-        if x < 0:
-            text = text[-x:]
-            x = 0
-        text = clip(text, self.cols - x)
-        try:
-            self.stdscr.addstr(y, x, text, self.styles[style])
-        except curses.error:
-            # Accursed curses raises an error after writing the bottom right cell, but still draws it.
-            pass
+        self.screen.put(y, x, text, style)
 
     def put_marked(self, y, x, text, style, hot_style):
         # Draw text with its ~hotkey~ in hot_style
@@ -870,8 +833,8 @@ class RadioInterface:
     ### Screens ###
 
     def draw(self):
-        self.stdscr.erase()
-        self.rows, self.cols = self.stdscr.getmaxyx()
+        self.screen.begin()
+        self.rows, self.cols = self.screen.height, self.screen.width
 
         # Room for the menu bar, the main window and its shadow, and the status line
         min_rows = self.window_height() + 3
@@ -879,7 +842,7 @@ class RadioInterface:
             self.fill(0, 0, self.rows, self.cols, "window")
             message = f"Make the terminal at least {MIN_COLS}x{min_rows}"
             self.put(self.rows // 2, max(0, (self.cols - len(message)) // 2), message, "value")
-            self.stdscr.refresh()
+            self.screen.render()
             return
 
         self.fill(0, 0, self.rows, self.cols, "desktop", "░")
@@ -898,7 +861,7 @@ class RadioInterface:
             self.draw_exit_dialog()
         elif self.mode == "help":
             self.draw_help_dialog()
-        self.stdscr.refresh()
+        self.screen.render()
 
     def draw_menu_bar(self):
         self.fill(0, 0, 1, self.cols, "menu")
@@ -1094,8 +1057,8 @@ class RadioInterface:
         volume = self.settings_volume
         fields = [
             ("Default station", f"◄ {self.stations[self.settings_station]:<11} ►"),
+            ("Default theme", f"◄ {self.settings_theme:<11} ►"),
             ("Startup volume", f"◄ {'█' * volume}{'░' * (9 - volume)} {volume} ►"),
-            ("Theme", f"◄ {self.settings_theme:<11} ►"),
         ]
         for i, (label, value) in enumerate(fields):
             y = top + 2 + i * 2

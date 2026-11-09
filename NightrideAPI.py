@@ -20,7 +20,7 @@ RETRY_DELAYS = [2, 5, 10, 30]
 
 
 def clean(text):
-    # Control characters (newlines, tabs, null bytes) in a title would break the layout or crash curses
+    # Control characters (newlines, tabs, null bytes) in a title would break the layout
     return "".join(c if c.isprintable() else " " for c in str(text)).strip()
 
 

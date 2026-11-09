@@ -28,6 +28,10 @@ Measures the audio level of the stream for the VU meter
 Finds the player's own audio stream in PulseAudio or PipeWire
 
 
+[screen.py](./screen.py)  
+Draws the interface on the terminal, sending only what changed
+
+
 [settings.py](./settings.py)  
 Reads and saves settings.ini, with defaults for anything missing
 
@@ -40,18 +44,35 @@ Various settings for the player
 Locations of the settings and log files, so the player can be started from any directory.
 
 ## How to start
-Developed to work on Linux. I might add support for different operating systems later :)
+Works on Linux and Windows. It needs [VLC](https://www.videolan.org/vlc/) for playing the audio.
+
+### Linux
 
 0. Install dependencies:
 
         sudo apt update && sudo apt install vlc
-        
+
         python3 -m venv .venv
         .venv/bin/pip install -r requirements.txt
 
 1. Run Radio.py:
 
         .venv/bin/python Radio.py
+
+### Windows
+
+0. Install [VLC](https://www.videolan.org/vlc/). It has to be the 64-bit version if your Python is 64-bit.
+
+1. Install the Python dependencies:
+
+        py -m venv .venv
+        .venv\Scripts\pip install -r requirements.txt
+
+2. Run Radio.py in [Windows Terminal](https://aka.ms/terminal):
+
+        .venv\Scripts\python Radio.py
+
+The VU meter and the NO AUDIO OUTPUT warning only work on Linux for now.
 
 
 ## How to use
@@ -62,7 +83,7 @@ Press **F10** to open the menus. **Alt** and the red letter of a menu opens it d
 In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to close. Red letters in menu items are hotkeys.
 
 - *Radio*: Browse stations, Help, About, Exit
-- *Options*: Mute, VU meter, Clock, and Settings for the default station, startup volume and theme
+- *Options*: Mute, VU meter, Clock, and Settings for the default station, default theme and startup volume
 - *Theme*: the color scheme
   - *Synthwave*: purple and cyan on dark grey (the default)
   - *Outrun*: neon pink, orange and yellow on navy
@@ -87,10 +108,11 @@ Press **Alt-X** or **F12** to quit, or **ESC** to get asked first.
 
 ## Notes
 
-The player looks best in an 80 by 25 terminal, like in the old days. It needs at least 50 columns by 14 rows.  
+The player looks best in an 80 by 25 terminal, like in the old days. It needs at least 50 columns by 14 rows, or 16 with the VU meter on.  
+If your terminal uses Esc, F10 or other keys for its own actions, those keys won't reach the player. Unbind them in the terminal's settings.  
 The VU meter needs `parec` and `pactl`, which come with PulseAudio and PipeWire (package `pulseaudio-utils` on Debian and Ubuntu).  
 It measures the music itself, so the volume setting doesn't change it, but it drops to zero while muted.  
-On terminals with 256 colours it uses the original VGA palette, regardless of your terminal's colour theme.
+On terminals with true colour, like Konsole and Windows Terminal, the themes show their exact colours regardless of your terminal's colour theme. Other terminals get the closest colours they have.
 
 If the stream drops, the player reconnects by itself and shows **RECONNECTING** meanwhile. **STREAM ERROR** means it has failed several times in a row, but it keeps trying. **NO SONG INFO** means the song information can't be fetched right now. The music may still play.
 
