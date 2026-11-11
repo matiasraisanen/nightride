@@ -25,8 +25,8 @@ class AudioPlayer:
     def play(self, station: str = "chillsynth"):
         self.logger.log.debug(f"Press play")
         try:
-            self.media = self.instance.media_new(f"{self.base_url}/{station}.m4a")
-            self.logger.log.debug(f"Playing url {self.base_url}/{station}.m4a")
+            self.media = self.instance.media_new(f"{self.base_url}/{station}.mp3")
+            self.logger.log.debug(f"Playing url {self.base_url}/{station}.mp3")
             self.player.set_media(self.media)
             self.player.play()
         except Exception as e:
