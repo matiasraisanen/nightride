@@ -1129,5 +1129,10 @@ class RadioInterface:
         self.button(top + 10, left + (w - 8) // 2, "   OK   ")
 
 
+def main():
+    # Entry point of the nightride command
+    RadioInterface(loglevel=logging.INFO)
+
+
 if __name__ == "__main__":
-    radio = RadioInterface(loglevel=logging.INFO)
+    main()

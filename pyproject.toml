@@ -1,0 +1,36 @@
+[project]
+name = "nightride"
+version = "2.0.0"
+description = "MS-DOS style terminal player for Nightride FM synthwave radio"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.9"
+dependencies = [
+    "blessed",
+    "python-vlc",
+    "sseclient-py",
+    "urllib3",
+]
+
+[project.urls]
+Homepage = "https://github.com/matiasraisanen/nightride"
+
+[project.scripts]
+nightride = "Radio:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = [
+    "Radio",
+    "NightrideAPI",
+    "AudioPlayer",
+    "LevelMeter",
+    "audio_streams",
+    "logger",
+    "paths",
+    "screen",
+    "settings",
+]

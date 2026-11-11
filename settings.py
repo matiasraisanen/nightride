@@ -1,7 +1,8 @@
 import configparser
 import os
+import shutil
 from logger import Logger
-from paths import LOG_FILE, SETTINGS_FILE
+from paths import DEFAULT_SETTINGS_FILE, LOG_FILE, SETTINGS_FILE
 
 # Used for anything missing from settings.ini, so a broken or partial file can't stop the player
 DEFAULTS = {
@@ -42,6 +43,12 @@ def log():
 
 def load():
     # Reads settings.ini, filling in anything missing from DEFAULTS
+    if not os.path.exists(SETTINGS_FILE) and os.path.exists(DEFAULT_SETTINGS_FILE):
+        # First start: begin with the settings that come with the code
+        try:
+            shutil.copyfile(DEFAULT_SETTINGS_FILE, SETTINGS_FILE)
+        except OSError as e:
+            log().warning(f"Could not copy {DEFAULT_SETTINGS_FILE} to {SETTINGS_FILE}: {e}")
     config = configparser.ConfigParser()
     try:
         config.read(SETTINGS_FILE)

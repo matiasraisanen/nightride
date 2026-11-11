@@ -23,7 +23,7 @@ class Logger:
         streamhandler: bool = False,
         filehandler: bool = False,
         log_file: str = "debug.log",
-        delete_old_logfile: bool = True,
+        delete_old_logfile: bool = False,
     ):
         self.log_file = log_file
         self.log_level = log_level
@@ -33,8 +33,8 @@ class Logger:
         self.log = logging.getLogger(module_name)
         self.log.setLevel(log_level)
 
-        # Only root level logger should delete old log file.
-        if module_name == "__main__" and delete_old_logfile:
+        # Only the main program's logger should delete the old log file.
+        if delete_old_logfile:
             self.delete_old_logfile()
 
         # Finally create the handlers and the class is ready to be used.

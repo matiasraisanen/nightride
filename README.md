@@ -37,40 +37,39 @@ Reads and saves settings.ini, with defaults for anything missing
 
 
 [settings.ini](./settings.ini)  
-Various settings for the player
+Default settings, copied to your own settings file on first start
 
 
 [paths.py](./paths.py)  
 Locations of the settings and log files, so the player can be started from any directory.
 
 ## How to start
-Works on Linux and Windows. It needs [VLC](https://www.videolan.org/vlc/) for playing the audio.
+Works on Linux and Windows. It needs [VLC](https://www.videolan.org/vlc/) for playing the audio, and [uv](https://docs.astral.sh/uv/) for installing.
 
-### Linux
-
-0. Install dependencies:
+0. Install VLC. On Debian and Ubuntu:
 
         sudo apt update && sudo apt install vlc
 
-        python3 -m venv .venv
-        .venv/bin/pip install -r requirements.txt
+   On Windows, use the 64-bit installer from the VLC website if your Python is 64-bit.
 
-1. Run Radio.py:
+1. Install the player as the `nightride` command, in the project folder:
 
-        .venv/bin/python Radio.py
+        uv tool install --editable .
 
-### Windows
+   With `--editable`, the command runs the code in this folder, so your changes show up without reinstalling.  
+   To install straight from GitHub instead: `uv tool install git+https://github.com/matiasraisanen/nightride`
 
-0. Install [VLC](https://www.videolan.org/vlc/). It has to be the 64-bit version if your Python is 64-bit.
+2. Run it from any terminal (on Windows, [Windows Terminal](https://aka.ms/terminal)):
 
-1. Install the Python dependencies:
+        nightride
 
-        py -m venv .venv
-        .venv\Scripts\pip install -r requirements.txt
+To run it without installing, set up a virtual environment and start `Radio.py`:
 
-2. Run Radio.py in [Windows Terminal](https://aka.ms/terminal):
+    python3 -m venv .venv
+    .venv/bin/pip install -r requirements.txt
+    .venv/bin/python Radio.py
 
-        .venv\Scripts\python Radio.py
+Settings are saved in `~/.config/nightride/settings.ini` (`%APPDATA%\nightride` on Windows) and the log goes to `~/.local/state/nightride/radio.log`. On first start, the settings are copied from [settings.ini](./settings.ini) in this folder.
 
 The VU meter and the NO AUDIO OUTPUT warning only work on Linux for now.
 
