@@ -53,12 +53,16 @@ class Session:
         values = list(self.values)
         return values[:2] if len(values) >= 2 else values * 2
 
+    def volume_setting(self):
+        # (the session's volume from 0 to 1, whether it is muted)
+        return self.volume.GetMasterVolume(), bool(self.volume.GetMute())
+
     def gain_db(self):
         # The session's volume in dB, -inf when muted. VLC sets its volume here, and the meter
         # measures the sound after it, so this is added back to get the level of the music itself.
-        if self.volume.GetMute():
+        volume, muted = self.volume_setting()
+        if muted:
             return -math.inf
-        volume = self.volume.GetMasterVolume()
         return 20 * math.log10(volume) if volume > 0 else -math.inf
 
 

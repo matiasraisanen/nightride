@@ -162,6 +162,8 @@ class LevelMeter:
         self.logger.log.debug(f"Reading the audio session's meter for the VU meter, {session.channels} channels")
         gain_db = session.gain_db()
         checked = time.time()
+        # The highest raw peaks in the last second, for the debug log
+        second_peaks = [0.0, 0.0]
         while self.enabled:
             # The highest peak of each channel over one measurement
             peaks = [0.0, 0.0]
@@ -170,10 +172,20 @@ class LevelMeter:
                 peaks = [max(old, new) for old, new in zip(peaks, session.peaks())]
                 time.sleep(WIN_POLL_SECONDS)
             self.update([self.to_db(value) for value in peaks], gain_db)
+            second_peaks = [max(old, new) for old, new in zip(second_peaks, peaks)]
 
             # Follow volume changes, and notice if the sound has moved, e.g. to another output device
             if time.time() - checked > 1:
                 checked = time.time()
+                if self.logger.log.isEnabledFor(logging.DEBUG):
+                    volume, muted = session.volume_setting()
+                    raw = ", ".join(f"{value:.3f} ({self.to_db(value):.1f} dB)" for value in second_peaks)
+                    shown = ", ".join(f"{level:.1f}" for level in self.levels)
+                    self.logger.log.debug(
+                        f"VU meter: raw peaks {raw}, session volume {volume:.3f} ({gain_db:+.1f} dB), "
+                        f"muted {muted}, shown {shown} dB"
+                    )
+                second_peaks = [0.0, 0.0]
                 session = self.find_session()
                 if session is None:
                     return
