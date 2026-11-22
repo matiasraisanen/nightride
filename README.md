@@ -43,6 +43,10 @@ Default settings, copied to your own settings file on first start
 [paths.py](./paths.py)  
 Locations of the settings and log files, so the player can be started from any directory.
 
+
+[windows/](./windows/)  
+Builds the stand-alone Windows version, with Python and VLC included.
+
 ## How to start
 Works on Linux and Windows. It needs [VLC](https://www.videolan.org/vlc/) for playing the audio, and [uv](https://docs.astral.sh/uv/) for installing.
 
@@ -72,6 +76,19 @@ To run it without installing, set up a virtual environment and start `Radio.py`:
 Settings are saved in `~/.config/nightride/settings.ini` (`%APPDATA%\nightride` on Windows) and the log goes to `~/.local/state/nightride/radio.log`. On first start, the settings are copied from [settings.ini](./settings.ini) in this folder.
 
 The VU meter and the NO AUDIO OUTPUT warning only work on Linux for now.
+
+If there is no sound, `nightride --test-stream` plays a station for a few seconds without the interface and says whether it worked.
+
+
+## Stand-alone Windows version
+
+A version for Windows that needs nothing installed: `nightride.exe` with Python and VLC in the same folder. Double-click it, or run `nightride` from cmd.exe or PowerShell in that folder.
+
+To build it, on Windows with [uv](https://docs.astral.sh/uv/) or 64-bit Python installed, in the project folder:
+
+    powershell -ExecutionPolicy Bypass -File windows\build.ps1
+
+The result is in `dist\nightride\`, and zipped as `dist\nightride-windows.zip`. Copy either one wherever you like.
 
 
 ## How to use

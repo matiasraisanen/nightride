@@ -1,5 +1,8 @@
+import argparse
 import logging
+import sys
 import time
+import traceback
 
 import blessed
 
@@ -1129,9 +1132,53 @@ class RadioInterface:
         self.button(top + 10, left + (w - 8) // 2, "   OK   ")
 
 
+def test_stream(station, sound=True):
+    # Plays a station for a few seconds without the interface. Returns True if it played.
+    from AudioPlayer import AudioPlayer
+
+    config = settings.load()
+    vlc_args = () if sound else ("--aout=dummy",)
+    player = AudioPlayer(config["URLS"]["audio_stream_base_url"], vlc_args=vlc_args)
+    print(f"Connecting to {station}...")
+    player.play(station)
+    if not player.started.wait(20):
+        print("FAILED: the stream did not start. See the log for details:", LOG_FILE)
+        return False
+    print("Playing. Listening for 5 seconds...")
+    time.sleep(5)
+    ok = not player.dropped
+    player.shutdown()
+    print("OK" if ok else f"FAILED: the stream stopped. See the log for details: {LOG_FILE}")
+    return ok
+
+
 def main():
     # Entry point of the nightride command
-    RadioInterface(loglevel=logging.INFO)
+    parser = argparse.ArgumentParser(prog="nightride", description="Player for Nightride FM synthwave radio")
+    parser.add_argument(
+        "--test-stream",
+        metavar="STATION",
+        nargs="?",
+        const="chillsynth",
+        help="play a station for a few seconds without the interface, to check that audio works",
+    )
+    # With --test-stream: decode the stream but don't play it, for testing on machines without sound
+    parser.add_argument("--no-sound", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+
+    try:
+        if args.test_stream:
+            sys.exit(0 if test_stream(args.test_stream, sound=not args.no_sound) else 1)
+        RadioInterface(loglevel=logging.INFO)
+    except Exception:
+        if not getattr(sys, "frozen", False):
+            raise
+        # The Windows build may have been started by double-clicking, and its window closes when it
+        # exits. Keep it open so the error can be read.
+        traceback.print_exc()
+        if sys.stdin.isatty():
+            input("Press Enter to close")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

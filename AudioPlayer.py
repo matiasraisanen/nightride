@@ -1,12 +1,24 @@
-from vlc import EventType, Instance, State
 import logging
+import os
 import queue
 import subprocess
+import sys
 import threading
 import time
 import audio_streams
 from logger import Logger
-from paths import LOG_FILE
+from paths import LOG_FILE, VLC_DIR
+
+if VLC_DIR:
+    # Use the VLC that comes with the Windows build. This must be set up before python-vlc is imported.
+    os.environ["PYTHON_VLC_LIB_PATH"] = os.path.join(VLC_DIR, "libvlc.dll")
+    os.environ["PYTHON_VLC_MODULE_PATH"] = os.path.join(VLC_DIR, "plugins")
+    os.environ["VLC_PLUGIN_PATH"] = os.path.join(VLC_DIR, "plugins")
+    if sys.platform == "win32":
+        # libvlc.dll needs libvlccore.dll from the same folder
+        _vlc_dll_dir = os.add_dll_directory(VLC_DIR)
+
+from vlc import EventType, Instance, State
 
 # A VLC call taking longer than this means the audio system is stuck
 STUCK_SECONDS = 3
@@ -26,7 +38,7 @@ class AudioPlayer:
     #
     # If the stream drops (network trouble, server restart), the worker reconnects to it.
 
-    def __init__(self, base_url, loglevel=logging.INFO, logfile: str = LOG_FILE):
+    def __init__(self, base_url, loglevel=logging.INFO, logfile: str = LOG_FILE, vlc_args=()):
         # Set when the stream has failed to come back after several attempts
         self.error = False
         # Set while waiting to reconnect a dropped stream
@@ -43,6 +55,8 @@ class AudioPlayer:
         # When the current VLC call started, or None when idle
         self.busy_since = None
         self.playing_since = None
+        # Set once a stream has started playing
+        self.started = threading.Event()
         self.commands = queue.Queue()
         self.stopped = threading.Event()
         try:
@@ -55,7 +69,7 @@ class AudioPlayer:
                 filehandler=True,
             )
 
-            self.instance = Instance("--input-repeat=-1", "-q")
+            self.instance = Instance("--input-repeat=-1", "-q", *vlc_args)
             self.player = self.instance.media_player_new()
             self.base_url = base_url
             self.url = ""
@@ -85,6 +99,7 @@ class AudioPlayer:
         self.attempts = 0
         self.reconnecting = False
         self.error = False
+        self.started.set()
 
     ### Commands. These return immediately, the worker thread carries them out. ###
 
