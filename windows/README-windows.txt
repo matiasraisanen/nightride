@@ -16,7 +16,7 @@ If there is no sound, run this to test the audio without the interface:
 Settings: %APPDATA%\nightride\settings.ini
 Log:      %APPDATA%\nightride\radio.log
 
-The VU meter only works on Linux.
+If something goes wrong, start it with "nightride --debug" to log every key press as well.
 
 Includes VLC (https://www.videolan.org/), licensed under the GNU LGPL / GPL.
 See _internal\vlc\VLC-COPYING.txt.

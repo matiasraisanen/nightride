@@ -28,6 +28,10 @@ Measures the audio level of the stream for the VU meter
 Finds the player's own audio stream in PulseAudio or PipeWire
 
 
+[win_audio.py](./win_audio.py)  
+Finds the player's own audio session on Windows, and reads its level for the VU meter
+
+
 [screen.py](./screen.py)  
 Draws the interface on the terminal, sending only what changed
 
@@ -75,7 +79,7 @@ To run it without installing, set up a virtual environment and start `Radio.py`:
 
 Settings are saved in `~/.config/nightride/settings.ini` (`%APPDATA%\nightride` on Windows) and the log goes to `~/.local/state/nightride/radio.log`. On first start, the settings are copied from [settings.ini](./settings.ini) in this folder.
 
-The VU meter and the NO AUDIO OUTPUT warning only work on Linux for now.
+The NO AUDIO OUTPUT warning only works on Linux for now.
 
 If there is no sound, `nightride --test-stream` plays a station for a few seconds without the interface and says whether it worked.
 
@@ -95,18 +99,19 @@ The result is in `dist\nightride\`, and zipped as `dist\nightride-windows.zip`. 
 
 The interface is modelled after MS-DOS era applications, with pull-down menus and dialog boxes.
 
-Press **F10** to open the menus. **Alt** and the red letter of a menu opens it directly: **Alt-R** for *Radio*, **Alt-O** for *Options*, **Alt-T** for *Theme*.  
+Press **F10** to open the menus. **Alt** and the red letter of a menu opens it directly: **Alt-R** for *Radio*, **Alt-O** for *Options*, **Alt-T** for *Theme*, **Alt-H** for *Help*.  
 In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to close. Red letters in menu items are hotkeys.
 
-- *Radio*: Browse stations, Help, About, Exit
-- *Options*: Mute, VU meter, Clock, and Settings for the default station, default theme and startup volume
-- *Theme*: the color scheme
+- *Radio*: Browse stations, Recently played, Web search, Mute, Exit
+- *Options*: VU meter, Clock, Date, and Settings for the station to start on, the startup volume, the clock and date formats and notifications
+- *Theme*: the color scheme. Moving over a theme shows it right away, **ENTER** keeps it and **ESC** goes back to the one you had. **t** and **Shift-T** change to the next and previous theme.
   - *Synthwave*: purple and cyan on dark grey (the default)
   - *Outrun*: neon pink, orange and yellow on navy
   - *Darksynth*: blood red and grey on black
   - *DOS*: the classic blue MS-DOS look
   - *C64*: light blue on dark blue, like a Commodore 64
   - *Amber CRT* and *Green CRT*: single-colour monitors
+- *Help*: the keys, and About
 
 Press **F1** for help, which lists all the keys.
 
@@ -120,13 +125,22 @@ Press arrow keys **UP** and **DOWN** to change volume, and **m** to mute.
 
 Press **v** to enable/disable the VU meter. It shows the average level of the music for the left and right channels. A single lit segment marks the highest point the bar reached recently.
 
+Press **c** and **d** to show or hide the clock and the date. Their formats are chosen in *Settings*, or written into `settings.ini` as [strftime formats](https://strftime.org) (`clock_format`, `date_format`).
+
+Press **F3** for the songs played on the current station since the player started.
+
+Press **w** to search the web for the song: on Bandcamp, YouTube or Google. Choose with the arrow keys or **b**, **y** and **g**. In *Recently played*, **ENTER** searches for the chosen song. The search addresses can be changed in `settings.ini`.
+
+A message above the status line says what a key did, and shows the new song when one starts. *Notifications* in *Settings* shows all of them, only new songs, only key actions, or none. The song and station are also in the terminal's window title.
+
 Press **Alt-X** or **F12** to quit, or **ESC** to get asked first.
 
 ## Notes
 
 The player looks best in an 80 by 25 terminal, like in the old days. It needs at least 50 columns by 14 rows, or 16 with the VU meter on.  
 If your terminal uses Esc, F10 or other keys for its own actions, those keys won't reach the player. Unbind them in the terminal's settings.  
-The VU meter needs `parec` and `pactl`, which come with PulseAudio and PipeWire (package `pulseaudio-utils` on Debian and Ubuntu).  
+On Linux, the VU meter needs `parec` and `pactl`, which come with PulseAudio and PipeWire (package `pulseaudio-utils` on Debian and Ubuntu).  
+On Windows, it reads the same meter as the Windows volume mixer. That meter gives the loudest samples rather than the average, so the bars run a bit higher than on Linux.  
 It measures the music itself, so the volume setting doesn't change it, but it drops to zero while muted.  
 On terminals with true colour, like Konsole and Windows Terminal, the themes show their exact colours regardless of your terminal's colour theme. Other terminals get the closest colours they have.
 

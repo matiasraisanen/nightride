@@ -7,6 +7,8 @@ license = "GPL-3.0-only"
 requires-python = ">=3.9"
 dependencies = [
     "blessed",
+    "comtypes; sys_platform == 'win32'",
+    "pycaw; sys_platform == 'win32'",
     "python-vlc",
     "sseclient-py",
     "urllib3",
@@ -33,4 +35,5 @@ py-modules = [
     "paths",
     "screen",
     "settings",
+    "win_audio",
 ]

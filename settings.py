@@ -9,6 +9,10 @@ DEFAULTS = {
     "URLS": {
         "sse_url": "https://nightride.fm/meta",
         "audio_stream_base_url": "https://stream.nightride.fm",
+        # Web search. {query} is replaced with the song's artist and title.
+        "bandcamp_search": "https://bandcamp.com/search?q={query}",
+        "youtube_search": "https://www.youtube.com/results?search_query={query}",
+        "google_search": "https://www.google.com/search?q={query}",
     },
     "STATIONS": {
         "1": "nightride",
@@ -23,9 +27,17 @@ DEFAULTS = {
     },
     "SETTINGS": {
         "vu_meter": "False",
-        "default_station": "chillsynth",
+        # A station's name, or "last" for the one played last
+        "default_station": "last",
+        "last_station": "chillsynth",
         "startup_volume": "4",
         "clock": "True",
+        "date": "True",
+        # strftime formats, see https://strftime.org
+        "clock_format": "%H:%M",
+        "date_format": "%d.%m.%Y",
+        # Messages above the status line: all, songs (new songs only), actions (key presses only) or off
+        "notifications": "all",
         "theme": "Synthwave",
     },
 }
@@ -49,12 +61,12 @@ def load():
             shutil.copyfile(DEFAULT_SETTINGS_FILE, SETTINGS_FILE)
         except OSError as e:
             log().warning(f"Could not copy {DEFAULT_SETTINGS_FILE} to {SETTINGS_FILE}: {e}")
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     try:
         config.read(SETTINGS_FILE)
     except configparser.Error as e:
         log().warning(f"Could not read {SETTINGS_FILE}, using default settings: {e}")
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
 
     for section, values in DEFAULTS.items():
         if not config.has_section(section):

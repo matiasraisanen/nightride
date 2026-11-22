@@ -1,3 +1,4 @@
+import collections
 import json
 import logging
 import re
@@ -17,6 +18,8 @@ READ_TIMEOUT_SECONDS = 90
 CONNECT_TIMEOUT_SECONDS = 10
 # Seconds to wait before each reconnect attempt. The last one repeats.
 RETRY_DELAYS = [2, 5, 10, 30]
+# Songs remembered per station for "Recently played"
+HISTORY_LENGTH = 20
 
 
 def clean(text):
@@ -51,6 +54,8 @@ class NightRideAPI:
 
         # Station => {"artist", "song", "started_at"}
         self.now_playing = {}
+        # Station => the songs played since the player started, newest last, as now_playing has them
+        self.history = collections.defaultdict(lambda: collections.deque(maxlen=HISTORY_LENGTH))
         # Whether the metadata stream is connected, and since when it hasn't been
         self.connected = False
         self.disconnected_since = time.time()
@@ -129,11 +134,16 @@ class NightRideAPI:
         else:
             start_time = time.time()
 
-        self.now_playing[station] = {
+        song = {
             "artist": artist,
             "song": title,
             "started_at": start_time,
         }
+        self.now_playing[station] = song
+        # The same song can be sent again, e.g. after reconnecting
+        history = self.history[station]
+        if not history or (history[-1]["artist"], history[-1]["song"]) != (artist, title):
+            history.append(song)
         self.logger.log.debug(f"New song detected on {station}: {artist} - {title}")
 
 

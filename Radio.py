@@ -1,8 +1,13 @@
 import argparse
 import logging
+import os
+import shutil
+import subprocess
 import sys
 import time
 import traceback
+import urllib.parse
+import webbrowser
 
 import blessed
 
@@ -71,6 +76,8 @@ def rgb(color):
 
 
 # Style name => (foreground, background), per theme. A third value "underline" underlines the text.
+# Unlit VU meter segments are grey in most themes. Some terminals brighten colours that are too dark to
+# read, and a dark shade of the lit colour would then look just like the lit segments.
 DOS_THEME = {
     "desktop": ("lightgray", "blue"),
     "menu": ("black", "lightgray"),
@@ -128,7 +135,7 @@ SYNTHWAVE_THEME = {
     "vu_low": ("lightcyan", "charcoal"),
     "vu_mid": ("lightmagenta", "charcoal"),
     "vu_high": ("lightred", "charcoal"),
-    "vu_off": ("darkpurple", "charcoal"),
+    "vu_off": ("slate", "charcoal"),
     "warning": ("black", "lightmagenta"),
     "dialog": ("white", "purple"),
     "dialog_border": ("lightcyan", "purple"),
@@ -164,7 +171,7 @@ OUTRUN_THEME = {
     "vu_low": ("yellow", "navy"),
     "vu_mid": ("orange", "navy"),
     "vu_high": ("hotpink", "navy"),
-    "vu_off": ("darkpurple", "navy"),
+    "vu_off": ("slate", "navy"),
     "dialog": ("white", "darkpurple"),
     "dialog_border": ("pink", "darkpurple"),
     "dialog_value": ("orange", "darkpurple"),
@@ -196,10 +203,10 @@ DARKSYNTH_THEME = {
     "number": ("brightred", "nearblack"),
     "bar_full": ("blood", "nearblack"),
     "bar_empty": ("deepred", "nearblack"),
-    "vu_low": ("darkred", "nearblack"),
-    "vu_mid": ("blood", "nearblack"),
-    "vu_high": ("brightred", "nearblack"),
-    "vu_off": ("deepred", "nearblack"),
+    "vu_low": ("blood", "nearblack"),
+    "vu_mid": ("brightred", "nearblack"),
+    "vu_high": ("lightred", "nearblack"),
+    "vu_off": ("slate", "nearblack"),
     "error": ("white", "blood"),
     "warning": ("black", "lightgray"),
     "dialog": ("pale", "charcoal"),
@@ -274,7 +281,7 @@ def crt_theme(brightest, bright, dim, dark):
         "vu_low": (dim, "nearblack"),
         "vu_mid": (bright, "nearblack"),
         "vu_high": (brightest, "nearblack"),
-        "vu_off": (dark, "nearblack"),
+        "vu_off": ("slate", "nearblack"),
         "error": ("nearblack", brightest),
         "warning": ("nearblack", bright),
         "dialog": (bright, dark),
@@ -318,6 +325,8 @@ STATUS_HINTS = {
     ],
     "menu": [("←→", "Menus"), ("↑↓", "Select"), ("Enter", "Choose"), ("Esc", "Close")],
     "stations": [("↑↓", "Station"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Cancel")],
+    "history": [("↑↓", "Song"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Close")],
+    "search": [("←→", "Site"), ("B Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
     "about": [("Enter", "Close")],
     "help": [("↑↓", "Scroll"), ("Enter", "Close")],
     "exit": [("←→", "Move"), ("Enter", "Select"), ("Y", "Yes"), ("N", "No"), ("Esc", "Cancel")],
@@ -325,6 +334,8 @@ STATUS_HINTS = {
 }
 
 ENTER_KEYS = ("\n", "\r", "KEY_ENTER")
+# Only these count as digits: str.isdigit() also accepts the likes of "²", which int() refuses
+DIGITS = tuple("0123456789")
 
 # Contents of the help dialog: (keys, description) rows, a heading (keys only), or None for a blank line
 HELP = [
@@ -332,8 +343,12 @@ HELP = [
     ("←→  1-9", "Change station"),
     ("↑↓", "Volume"),
     ("M", "Mute"),
-    ("V", "VU meter on/off"),
     ("F2", "Browse stations"),
+    ("F3", "Recently played"),
+    ("W", "Web search for the song"),
+    ("V", "VU meter on/off"),
+    ("C  D", "Clock, date on/off"),
+    ("T  Shift-T", "Next, previous theme"),
     ("F10", "Menus, or Alt + red letter"),
     ("F1", "This help"),
     ("Esc", "Exit, asks first"),
@@ -346,7 +361,28 @@ HELP = [
 ]
 
 # Focusable items in the settings dialog, top to bottom
-SETTINGS_STATION, SETTINGS_THEME, SETTINGS_VOLUME, SETTINGS_OK, SETTINGS_CANCEL = range(5)
+SETTINGS_START, SETTINGS_VOLUME, SETTINGS_CLOCK, SETTINGS_DATE, SETTINGS_NOTIFY, SETTINGS_OK, SETTINGS_CANCEL = range(7)
+
+# Which messages show above the status line: setting => (label in the settings, kinds shown).
+# Errors always show.
+NOTIFICATIONS = {
+    "all": ("All", {"song", "action"}),
+    "songs": ("New songs", {"song"}),
+    "actions": ("Key actions", {"action"}),
+    "off": ("Off", set()),
+}
+
+# Web search sites: (name, setting with its address, whether the station's name is added to the search).
+# Bandcamp and YouTube look for every word, so only Google gets the station.
+SEARCH_SITES = [
+    ("Bandcamp", "bandcamp_search", False),
+    ("YouTube", "youtube_search", False),
+    ("Google", "google_search", True),
+]
+
+# Formats to choose from in the settings. settings.ini can have any other strftime format.
+CLOCK_FORMATS = ["%H:%M", "%H:%M:%S", "%I:%M %p"]
+DATE_FORMATS = ["%d.%m.%Y", "%a %d.%m.", "%Y-%m-%d", "%a %d %b"]
 
 MIN_COLS = 50
 
@@ -357,6 +393,10 @@ ESC_DELAY_SECONDS = 0.05
 
 # How long the metadata stream may be disconnected before the song info is marked as missing
 METADATA_GRACE_SECONDS = 10
+# How long a message stays in the status line
+STATUS_MESSAGE_SECONDS = 2.0
+# A new song's message stays longer, as it comes without a key press
+SONG_MESSAGE_SECONDS = 5.0
 
 # Scrolling of names too long to fit
 MARQUEE_PAUSE = 2.0  # seconds to rest at the start of each loop
@@ -380,6 +420,50 @@ def visible_len(text):
     return len(text.replace("~", ""))
 
 
+def open_url(url):
+    # Opens url in the default browser. Browsers started from a terminal can print messages to it,
+    # which would mess up the interface, so their output goes nowhere.
+    if sys.platform == "win32":
+        os.startfile(url)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    elif shutil.which("xdg-open"):
+        subprocess.Popen(
+            ["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+        )
+    elif not webbrowser.open(url):
+        raise OSError("no browser found")
+
+
+# Terminal sequences for the window title: set it, and save and restore the terminal's own title
+SET_TITLE = "\x1b]2;{}\x07"
+SAVE_TITLE = "\x1b[22;2t"
+RESTORE_TITLE = "\x1b[23;2t"
+
+
+def write_terminal(*sequences):
+    # Sends control sequences that don't draw anything
+    if sys.stdout and sys.stdout.isatty():
+        sys.stdout.write("".join(sequences))
+        sys.stdout.flush()
+
+
+def cycle(choices, current, step):
+    # The choice step places from current. A current value that isn't among the choices (a format
+    # written into settings.ini by hand) comes first, so it can be got back to.
+    if current not in choices:
+        choices = [current] + choices
+    return choices[(choices.index(current) + step) % len(choices)]
+
+
+def format_time(fmt):
+    # The time now in a strftime format from the settings. A broken format shows as "?".
+    try:
+        return time.strftime(fmt)
+    except ValueError:
+        return "?"
+
+
 class RadioInterface:
     def __init__(self, loglevel=logging.INFO, logfile: str = LOG_FILE):
         self.logger = Logger(
@@ -401,16 +485,21 @@ class RadioInterface:
         self.level_meter = LevelMeter(loglevel=loglevel, logfile=logfile)
         self.level_meter.enabled = self.VU_METER
         self.CLOCK = settings.get_bool(self.config, "SETTINGS", "clock")
+        self.DATE = settings.get_bool(self.config, "SETTINGS", "date")
         self.theme = self.config["SETTINGS"]["theme"]
         if self.theme not in THEMES:
             self.logger.log.warning(f"Unknown theme {self.theme!r}")
             self.theme = "Synthwave"
+        # The chosen theme. self.theme differs from it while the Theme menu previews another one.
+        self.saved_theme = self.theme
         self.volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
         self.muted = False
         self.api.audioPlayer.set_volume(self.volume)
         self.station = self.config["SETTINGS"]["default_station"]
+        if self.station == "last":
+            self.station = self.config["SETTINGS"]["last_station"]
         if self.station not in self.stations:
-            self.logger.log.warning(f"Default station {self.station!r} is not in the station list")
+            self.logger.log.warning(f"Station {self.station!r} is not in the station list")
             self.station = self.stations[0]
         self.version = "v2.0"
 
@@ -421,27 +510,52 @@ class RadioInterface:
         self.menu_item = 0
         self.dialog_sel = 0
         self.dialog_scroll = 0
+        # A short message in the status line, saying what the last key press did, and until when it shows
+        self.message = ""
+        self.message_until = 0.0
+        # The station and song last seen, to notice when a new song starts
+        self.seen_song = None
         # Browse dialog: whether "Play" has focus (otherwise "Cancel")
         self.browse_play = True
         self.list_height = 1
         self.menu_x = []
         # Scrolling texts: name => (text, when it started scrolling)
         self.marquees = {}
-        # Settings dialog: the focused field (see SETTINGS_* below), and the values being edited
+        # Settings dialog: the focused field (see SETTINGS_* below), and the values being edited.
+        # Start is "last" or a station, the formats are strftime formats.
         self.settings_field = 0
-        self.settings_station = 0
+        self.settings_start = "last"
         self.settings_volume = 0
-        # The theme shown while the dialog is open, and the one to go back to on Cancel
-        self.settings_theme = ""
-        self.theme_before_settings = ""
+        self.settings_clock = ""
+        self.settings_date = ""
+        self.settings_notify = "all"
+        # Recently played dialog: the chosen song (0 is the newest), the first one shown, how many
+        # fit, and whether "Search" has focus (otherwise "Close")
+        self.history_sel = 0
+        self.history_scroll = 0
+        self.history_height = 1
+        self.history_search = True
+        # Web search dialog: the song, the site with focus, and the screen to go back to
+        self.search_song = {}
+        self.search_choice = 0
+        self.search_return = "main"
         # Exit dialog: whether "Yes" has focus
         self.exit_yes = True
         # Help dialog: first visible line, and how many lines fit
         self.help_scroll = 0
         self.help_height = len(HELP)
 
+        if sys.platform == "win32" and sys.stdin and sys.stdin.isatty():
+            # blessed reads the keys one byte at a time. In text mode, Windows holds back Enter to see
+            # if a line feed follows, and the next read then fails with PermissionError.
+            import msvcrt
+
+            msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
         self.term = blessed.Terminal()
         self.screen = Screen(self.term)
+        # The window title shown, and the terminal's own title saved to put back on exit
+        self.title = None
+        write_terminal(SAVE_TITLE)
         try:
             with self.term.fullscreen(), self.term.cbreak(), self.term.hidden_cursor():
                 self.main()
@@ -449,8 +563,13 @@ class RadioInterface:
             # Ctrl-C quits like Alt-X
             pass
         except Exception as e:
-            print("An error caused the program to crash. See radio.log for details")
             self.logger.log.exception(e)
+            self.api.audioPlayer.shutdown()
+            raise
+        finally:
+            # Clear our title, then restore the saved one. Terminals that can't restore titles are
+            # left with an empty one, which most show as their default.
+            write_terminal(SET_TITLE.format(""), RESTORE_TITLE)
         self.api.audioPlayer.shutdown()
 
     def main(self):
@@ -458,6 +577,8 @@ class RadioInterface:
         self.set_station(self.station)
         while self.running:
             self.read_keys()
+            self.check_new_song()
+            self.update_title()
             self.draw()
 
     def init_styles(self):
@@ -477,11 +598,16 @@ class RadioInterface:
         # Keys are named the way blessed names them ("KEY_UP", "KEY_F1"), or are the character typed.
         key = self.term.inkey(timeout=FRAME_SECONDS, esc_delay=ESC_DELAY_SECONDS)
         while key:
-            name = key.name if key.is_sequence else str(key)
-            if name and name.startswith("KEY_ALT_") and len(name) == len("KEY_ALT_") + 1:
+            # Unknown sequences have no name. They are passed on as they are and match nothing.
+            name = key.name or str(key)
+            if name.startswith("KEY_ALT_") and len(name) == len("KEY_ALT_") + 1:
                 name = f"ALT_{name[-1].lower()}"
-            self.logger.log.debug(f"User pressed key {name!r}")
-            self.handle_key(name)
+            self.logger.log.debug(f"User pressed key {name!r} ({str(key)!r})")
+            try:
+                self.handle_key(name)
+            except Exception:
+                # One bad key shouldn't stop the music
+                self.logger.log.exception(f"Error handling key {name!r} ({str(key)!r})")
             key = self.term.inkey(timeout=0, esc_delay=ESC_DELAY_SECONDS)
 
     def handle_key(self, key):
@@ -493,6 +619,10 @@ class RadioInterface:
             self.station_dialog_key(key)
         elif self.mode == "settings":
             self.settings_dialog_key(key)
+        elif self.mode == "history":
+            self.history_dialog_key(key)
+        elif self.mode == "search":
+            self.search_dialog_key(key)
         elif self.mode == "exit":
             self.exit_dialog_key(key)
         elif self.mode == "help":
@@ -502,9 +632,22 @@ class RadioInterface:
                 self.mode = "main"
         else:
             self.main_key(key)
+        self.preview_theme()
+
+    def preview_theme(self):
+        # In the Theme menu, the highlighted theme shows right away. Enter chooses it. Anywhere else,
+        # e.g. after Esc closes the menu, the chosen theme shows.
+        theme = self.saved_theme
+        if self.mode == "menu":
+            item = self.menus()[self.menu_index][1][self.menu_item]
+            if item is not None and item[0].replace("~", "") in THEMES:
+                theme = item[0].replace("~", "")
+        if theme != self.theme:
+            self.theme = theme
+            self.init_styles()
 
     def main_key(self, key):
-        if key.isdigit() and 1 <= int(key) <= min(9, len(self.stations)):
+        if key in DIGITS and 1 <= int(key) <= min(9, len(self.stations)):
             self.set_station(self.stations[int(key) - 1])
         elif key == "KEY_LEFT":
             self.step_station(-1)
@@ -518,10 +661,20 @@ class RadioInterface:
             self.toggle_vu_meter()
         elif key == "m":
             self.toggle_mute()
+        elif key == "c":
+            self.toggle_clock()
+        elif key == "d":
+            self.toggle_date()
+        elif key in ("t", "T"):
+            self.step_theme(1 if key == "t" else -1)
+        elif key == "w":
+            self.open_search()
         elif key == "KEY_F1":
             self.open_help()
         elif key == "KEY_F2":
             self.open_station_dialog()
+        elif key == "KEY_F3":
+            self.open_history()
         elif key == "KEY_F10":
             self.open_menu(0)
         elif key == "KEY_ESCAPE":
@@ -561,7 +714,7 @@ class RadioInterface:
     def station_dialog_key(self, key):
         last = len(self.stations) - 1
         list_keys = ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END")
-        if key in list_keys or key.isdigit():
+        if key in list_keys or key in DIGITS:
             # Picking a station puts the focus back on Play, so Enter never cancels by surprise
             self.browse_play = True
         if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
@@ -578,7 +731,7 @@ class RadioInterface:
             self.dialog_sel = 0
         elif key == "KEY_END":
             self.dialog_sel = last
-        elif key.isdigit() and 1 <= int(key) <= len(self.stations):
+        elif key in DIGITS and 1 <= int(key) <= len(self.stations):
             self.dialog_sel = int(key) - 1
         elif key in ENTER_KEYS and self.browse_play:
             self.logger.log.debug(f"User selected station {self.stations[self.dialog_sel]} via F2")
@@ -594,34 +747,75 @@ class RadioInterface:
             # The buttons are one row: going down from the last field lands on OK
             self.settings_field = field if on_buttons else field + 1
         elif key == "KEY_UP":
-            self.settings_field = SETTINGS_VOLUME if on_buttons else max(SETTINGS_STATION, field - 1)
+            self.settings_field = SETTINGS_NOTIFY if on_buttons else max(SETTINGS_START, field - 1)
         elif key in ("KEY_TAB", "KEY_BTAB"):
             step = 1 if key == "KEY_TAB" else -1
-            self.settings_field = (field + step) % 5
+            self.settings_field = (field + step) % (SETTINGS_CANCEL + 1)
         elif key in ("KEY_LEFT", "KEY_RIGHT"):
             step = -1 if key == "KEY_LEFT" else 1
-            if field == SETTINGS_STATION:
-                self.settings_station = (self.settings_station + step) % len(self.stations)
+            if field == SETTINGS_START:
+                self.settings_start = cycle(["last"] + self.stations, self.settings_start, step)
             elif field == SETTINGS_VOLUME:
                 self.settings_volume = min(9, max(0, self.settings_volume + step))
-            elif field == SETTINGS_THEME:
-                names = list(THEMES)
-                self.settings_theme = names[(names.index(self.settings_theme) + step) % len(names)]
-                # Show the theme right away. Cancel puts the old one back.
-                self.theme = self.settings_theme
-                self.init_styles()
+            elif field == SETTINGS_CLOCK:
+                self.settings_clock = cycle(CLOCK_FORMATS, self.settings_clock, step)
+            elif field == SETTINGS_DATE:
+                self.settings_date = cycle(DATE_FORMATS, self.settings_date, step)
+            elif field == SETTINGS_NOTIFY:
+                self.settings_notify = cycle(list(NOTIFICATIONS), self.settings_notify, step)
             else:
                 self.settings_field = SETTINGS_CANCEL if field == SETTINGS_OK else SETTINGS_OK
         elif key in ENTER_KEYS and field != SETTINGS_CANCEL:
-            self.config.set("SETTINGS", "default_station", self.stations[self.settings_station])
+            self.config.set("SETTINGS", "default_station", self.settings_start)
             self.config.set("SETTINGS", "startup_volume", str(self.settings_volume))
-            self.set_theme(self.settings_theme)
+            self.config.set("SETTINGS", "clock_format", self.settings_clock)
+            self.config.set("SETTINGS", "date_format", self.settings_date)
+            self.config.set("SETTINGS", "notifications", self.settings_notify)
+            self.save_config()
+            self.notify("Settings saved")
             self.mode = "main"
         elif key in ENTER_KEYS + ("KEY_ESCAPE",):
-            if self.theme != self.theme_before_settings:
-                self.theme = self.theme_before_settings
-                self.init_styles()
             self.mode = "main"
+
+    def history_dialog_key(self, key):
+        songs = self.history_songs()
+        last = max(0, len(songs) - 1)
+        if key in ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END"):
+            self.history_search = True
+        if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
+            self.history_search = not self.history_search
+        elif key == "KEY_UP":
+            self.history_sel = max(0, self.history_sel - 1)
+        elif key == "KEY_DOWN":
+            self.history_sel = min(last, self.history_sel + 1)
+        elif key == "KEY_PGUP":
+            self.history_sel = max(0, self.history_sel - self.history_height)
+        elif key == "KEY_PGDOWN":
+            self.history_sel = min(last, self.history_sel + self.history_height)
+        elif key == "KEY_HOME":
+            self.history_sel = 0
+        elif key == "KEY_END":
+            self.history_sel = last
+        elif (key == "w" or (key in ENTER_KEYS and self.history_search)) and songs:
+            self.open_search(songs[self.history_sel], back_to="history")
+        elif key in ENTER_KEYS + ("KEY_ESCAPE", "KEY_F3"):
+            self.mode = "main"
+
+    def search_dialog_key(self, key):
+        # The choices are the sites and, last, Cancel
+        choices = len(SEARCH_SITES) + 1
+        if key in ("KEY_LEFT", "KEY_BTAB"):
+            self.search_choice = (self.search_choice - 1) % choices
+        elif key in ("KEY_RIGHT", "KEY_TAB"):
+            self.search_choice = (self.search_choice + 1) % choices
+        elif key in ENTER_KEYS and self.search_choice < len(SEARCH_SITES):
+            self.web_search(self.search_choice)
+        elif key in ENTER_KEYS:
+            self.mode = self.search_return
+        elif len(key) == 1 and key.lower() in "byg":
+            self.web_search("byg".index(key.lower()))
+        elif key == "KEY_ESCAPE":
+            self.mode = self.search_return
 
     def help_dialog_key(self, key):
         last = max(0, len(HELP) - self.help_height)
@@ -647,14 +841,16 @@ class RadioInterface:
     def menus(self):
         # Each menu is (title, items). An item is (label, shortcut, action, checked, toggle), or None for a separator.
         # Choosing a toggle item keeps the menu open, so you can see its check mark change.
+        # Radio is for listening, Options for what the window shows, Theme for its colours.
         return [
             (
                 "~R~adio",
                 [
                     ("~B~rowse stations...", "F2", self.open_station_dialog, False, False),
+                    ("~R~ecently played...", "F3", self.open_history, False, False),
+                    ("~W~eb search...", "W", self.open_search, False, False),
                     None,
-                    ("~H~elp...", "F1", self.open_help, False, False),
-                    ("~A~bout...", None, self.open_about, False, False),
+                    ("~M~ute", "M", self.toggle_mute, self.muted, True),
                     None,
                     ("E~x~it", "Alt-X", self.quit, False, False),
                 ],
@@ -662,20 +858,27 @@ class RadioInterface:
             (
                 "~O~ptions",
                 [
-                    ("~M~ute", "M", self.toggle_mute, self.muted, True),
-                    None,
                     ("~V~U meter", "V", self.toggle_vu_meter, self.VU_METER, True),
-                    ("~C~lock", None, self.toggle_clock, self.CLOCK, True),
+                    ("~C~lock", "C", self.toggle_clock, self.CLOCK, True),
+                    ("~D~ate", "D", self.toggle_date, self.DATE, True),
                     None,
                     ("~S~ettings...", None, self.open_settings, False, False),
                 ],
             ),
             (
                 "~T~heme",
-                # Picking a theme keeps the menu open, so you can see it behind the menu
+                # The highlighted theme shows behind the menu (see preview_theme), and Enter chooses it
                 [
-                    (theme_label(name), None, lambda n=name: self.set_theme(n), name == self.theme, True)
+                    (theme_label(name), None, lambda n=name: self.set_theme(n), name == self.saved_theme, False)
                     for name in THEMES
+                ]
+                + [None, ("~N~ext theme", "T", lambda: self.step_theme(1), False, True)],
+            ),
+            (
+                "~H~elp",
+                [
+                    ("~K~eys...", "F1", self.open_help, False, False),
+                    ("~A~bout...", None, self.open_about, False, False),
                 ],
             ),
         ]
@@ -684,6 +887,10 @@ class RadioInterface:
         self.mode = "menu"
         self.menu_index = index
         self.menu_item = 0
+        # The Theme menu opens on the chosen theme, so nothing changes until the highlight moves
+        for i, item in enumerate(self.menus()[index][1]):
+            if item is not None and item[0].replace("~", "") == self.saved_theme:
+                self.menu_item = i
 
     def open_menu_by_hotkey(self, letter):
         for i, (title, items) in enumerate(self.menus()):
@@ -708,13 +915,53 @@ class RadioInterface:
         self.dialog_sel = self.stations.index(self.station)
         self.browse_play = True
 
+    def open_history(self):
+        self.mode = "history"
+        self.history_sel = 0
+        self.history_scroll = 0
+        self.history_search = True
+
+    def history_songs(self):
+        # The playing station's songs, newest first
+        return list(reversed(self.api.history[self.station]))
+
+    def open_search(self, song=None, back_to="main"):
+        # Asks where to search for a song, the one playing if none is given
+        song = song or self.api.now_playing.get(self.station, {})
+        if not (song.get("artist") or song.get("song")):
+            self.notify("No song info to search for", kind="error")
+            return
+        self.mode = "search"
+        self.search_song = song
+        self.search_choice = 0
+        self.search_return = back_to
+
+    def web_search(self, choice):
+        name, setting, with_station = SEARCH_SITES[choice]
+        words = [self.search_song.get("artist", ""), self.search_song.get("song", "")]
+        if with_station:
+            words.append(self.station)
+        query = urllib.parse.quote_plus(" ".join(word for word in words if word))
+        url = self.config["URLS"][setting].replace("{query}", query)
+        self.logger.log.debug(f"Opening {url}")
+        try:
+            open_url(url)
+            self.notify(f"Opened {name} in the browser")
+        except OSError as e:
+            self.logger.log.error(f"Could not open {url}: {e}")
+            self.notify("Could not open the browser", kind="error")
+        self.mode = self.search_return
+
     def open_settings(self):
         self.mode = "settings"
         self.settings_field = 0
-        default_station = self.config["SETTINGS"]["default_station"]
-        self.settings_station = self.stations.index(default_station) if default_station in self.stations else 0
+        start = self.config["SETTINGS"]["default_station"]
+        self.settings_start = start if start in self.stations else "last"
         self.settings_volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
-        self.settings_theme = self.theme_before_settings = self.theme
+        self.settings_clock = self.config["SETTINGS"]["clock_format"]
+        self.settings_date = self.config["SETTINGS"]["date_format"]
+        notify = self.config["SETTINGS"]["notifications"]
+        self.settings_notify = notify if notify in NOTIFICATIONS else "all"
 
     def quit(self):
         self.running = False
@@ -724,6 +971,9 @@ class RadioInterface:
         try:
             self.station = station
             self.api.audioPlayer.play(station)
+            if self.config["SETTINGS"]["last_station"] != station:
+                self.config.set("SETTINGS", "last_station", station)
+                self.save_config()
         except Exception as e:
             self.logger.log.error(f"Failed to set station to {station}")
             self.logger.log.error(e)
@@ -749,23 +999,68 @@ class RadioInterface:
     def toggle_mute(self):
         self.muted = not self.muted
         self.apply_volume()
+        self.notify("Muted" if self.muted else "Sound on")
 
     def toggle_vu_meter(self):
         self.VU_METER = not self.VU_METER
         self.level_meter.enabled = self.VU_METER
         self.config.set("SETTINGS", "vu_meter", f"{self.VU_METER}")
         self.save_config()
+        self.notify(f"VU meter {'on' if self.VU_METER else 'off'}")
 
     def set_theme(self, name):
-        self.theme = name
+        self.theme = self.saved_theme = name
         self.init_styles()
         self.config.set("SETTINGS", "theme", name)
         self.save_config()
+        self.notify(f"Theme: {name}")
 
     def toggle_clock(self):
         self.CLOCK = not self.CLOCK
         self.config.set("SETTINGS", "clock", f"{self.CLOCK}")
         self.save_config()
+        self.notify(f"Clock {'on' if self.CLOCK else 'off'}")
+
+    def toggle_date(self):
+        self.DATE = not self.DATE
+        self.config.set("SETTINGS", "date", f"{self.DATE}")
+        self.save_config()
+        self.notify(f"Date {'on' if self.DATE else 'off'}")
+
+    def step_theme(self, step):
+        names = list(THEMES)
+        self.set_theme(names[(names.index(self.saved_theme) + step) % len(names)])
+
+    def update_title(self):
+        # The song and station in the terminal's window or tab title, for when the player is in the background
+        info = self.api.now_playing.get(self.station, {})
+        song = " – ".join(part for part in (info.get("artist"), info.get("song")) if part)
+        title = f"{song} · {self.station}" if song else f"{self.station} · Nightride FM"
+        # Control characters in a song name could end the title early
+        title = "".join(c for c in title if c.isprintable())
+        if title != self.title:
+            self.title = title
+            write_terminal(SET_TITLE.format(title))
+
+    def notify(self, message, seconds=STATUS_MESSAGE_SECONDS, kind="action"):
+        # Shows message above the status line for a moment, if the settings allow its kind:
+        # "action" for what a key did, "song" for a new song, "error" always shows
+        setting = NOTIFICATIONS.get(self.config["SETTINGS"]["notifications"], NOTIFICATIONS["all"])
+        if kind != "error" and kind not in setting[1]:
+            return
+        self.message = message
+        self.message_until = time.time() + seconds
+
+    def check_new_song(self):
+        # Announce a new song on the station that is playing. Not when changing stations: the new
+        # station's song is already in the window then.
+        info = self.api.now_playing.get(self.station, {})
+        song = (self.station, info.get("artist", ""), info.get("song", ""))
+        if song == self.seen_song:
+            return
+        if self.seen_song and self.seen_song[0] == self.station and (song[1] or song[2]):
+            self.notify("♪ " + " – ".join(part for part in song[1:] if part), SONG_MESSAGE_SECONDS, kind="song")
+        self.seen_song = song
 
     def save_config(self):
         try:
@@ -860,6 +1155,10 @@ class RadioInterface:
             self.draw_about_dialog()
         elif self.mode == "settings":
             self.draw_settings_dialog()
+        elif self.mode == "history":
+            self.draw_history_dialog()
+        elif self.mode == "search":
+            self.draw_search_dialog()
         elif self.mode == "exit":
             self.draw_exit_dialog()
         elif self.mode == "help":
@@ -876,9 +1175,17 @@ class RadioInterface:
             self.put_marked(0, x, f" {title} ", style, hot_style)
             self.menu_x.append(x)
             x += visible_len(title) + 2
+        parts = []
+        if self.DATE:
+            parts.append(format_time(self.config["SETTINGS"]["date_format"]))
         if self.CLOCK:
-            clock = time.strftime("%H:%M:%S")
-            self.put(0, self.cols - len(clock) - 2, clock, "menu")
+            parts.append(format_time(self.config["SETTINGS"]["clock_format"]))
+        # In a narrow terminal the date goes first, then the clock
+        while parts and x + len("  ".join(parts)) + 2 > self.cols:
+            parts.pop(0)
+        if parts:
+            text = "  ".join(parts)
+            self.put(0, self.cols - len(text) - 2, text, "menu")
 
     def draw_status_line(self):
         y = self.rows - 1
@@ -891,6 +1198,9 @@ class RadioInterface:
             self.put(y, x, key, "menu_hot")
             self.put(y, x + len(key) + 1, label, "menu")
             x += width + 2
+        if time.time() < self.message_until:
+            # A message shows for a moment on the row above, at its start
+            self.put(y - 1, 0, " " + clip(self.message, self.cols - 4) + " ", "menu_sel")
 
     def window_height(self):
         # The VU meter takes two more rows
@@ -956,16 +1266,19 @@ class RadioInterface:
             self.put(top + 8, value_x + 12, str(self.volume), "number")
 
         if self.VU_METER:
-            self.put(top + 9, label_x, "Level", "label")
-            self.draw_level_meter(top + 9, value_x, w - 18)
+            # The channel letters line up with the labels above
+            self.draw_level_meter(top + 9, label_x, w - 8)
 
-    def draw_level_meter(self, y, x, width):
+    def draw_level_meter(self, y, x, space):
         # Stereo LED meter. Bars show the average level, the lone lit segment is where the bar recently peaked.
+        # Each segment is 1 dB, so the colour zones start on whole segments. Only a window too narrow for
+        # that squeezes the scale into the space there is.
         if not self.level_meter.available:
-            self.put(y, x, "Needs parec and pactl", "label")
+            self.put(y, x, self.level_meter.missing, "label")
             return
         levels, peaks = self.level_meter.get()
         scale = CEILING_DB - FLOOR_DB
+        width = min(space, round(scale))
         for row, (channel, level, peak) in enumerate(zip("LR", levels, peaks)):
             self.put(y + row, x, channel, "label")
             lit = round((level - FLOOR_DB) / scale * width)
@@ -973,7 +1286,8 @@ class RadioInterface:
             for i in range(width):
                 db = FLOOR_DB + (i + 1) / width * scale
                 zone = "vu_high" if db > -6 else "vu_mid" if db > -12 else "vu_low"
-                self.put(y + row, x + 2 + i, "■", zone if i < lit or i == hold else "vu_off")
+                # A thin bar that leaves room above and below, so the L and R rows don't run together
+                self.put(y + row, x + 2 + i, "▮", zone if i < lit or i == hold else "vu_off")
 
     def draw_menu_dropdown(self):
         title, items = self.menus()[self.menu_index]
@@ -1052,16 +1366,20 @@ class RadioInterface:
 
     def draw_settings_dialog(self):
         w = 44
-        h = 11
+        h = 15
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Settings")
 
         volume = self.settings_volume
+        start = "Last played" if self.settings_start == "last" else self.settings_start
+        # The formats are shown as the time now looks in them
         fields = [
-            ("Default station", f"◄ {self.stations[self.settings_station]:<11} ►"),
-            ("Default theme", f"◄ {self.settings_theme:<11} ►"),
+            ("Start on", f"◄ {clip(start, 11):<11} ►"),
             ("Startup volume", f"◄ {'█' * volume}{'░' * (9 - volume)} {volume} ►"),
+            ("Clock", f"◄ {clip(format_time(self.settings_clock), 11):<11} ►"),
+            ("Date", f"◄ {clip(format_time(self.settings_date), 11):<11} ►"),
+            ("Notifications", f"◄ {NOTIFICATIONS[self.settings_notify][0]:<11} ►"),
         ]
         for i, (label, value) in enumerate(fields):
             y = top + 2 + i * 2
@@ -1071,6 +1389,67 @@ class RadioInterface:
         buttons_y = top + h - 3
         self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.settings_field == SETTINGS_OK)
         self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.settings_field == SETTINGS_CANCEL, cancel=True)
+
+    def draw_history_dialog(self):
+        songs = self.history_songs()
+        w = min(60, self.cols - 4)
+        self.history_height = max(1, min(len(songs), self.rows - 11))
+        h = self.history_height + 8
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", f"Recently Played: {self.station}")
+
+        # Keep the chosen song visible
+        if self.history_sel < self.history_scroll:
+            self.history_scroll = self.history_sel
+        elif self.history_sel >= self.history_scroll + self.history_height:
+            self.history_scroll = self.history_sel - self.history_height + 1
+
+        list_x = left + 2
+        list_w = w - 4
+        self.box(top + 1, list_x, self.history_height + 2, list_w, "dialog", double=False)
+        if not songs:
+            self.put(top + 2, list_x + 1, " No songs yet".ljust(list_w - 2), "list")
+        for row in range(self.history_height):
+            i = self.history_scroll + row
+            if i >= len(songs):
+                break
+            song = songs[i]
+            started = time.strftime("%H:%M", time.localtime(song["started_at"]))
+            name = " – ".join(part for part in (song["artist"], song["song"]) if part)
+            text = clip(f" {started}  {name}", list_w - 3).ljust(list_w - 2)
+            self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.history_sel else "list")
+        bar_x = list_x + list_w - 1
+        if self.history_scroll > 0:
+            self.put(top + 2, bar_x, "▲", "dialog")
+        if self.history_scroll + self.history_height < len(songs):
+            self.put(top + 1 + self.history_height, bar_x, "▼", "dialog")
+
+        info_y = top + self.history_height + 3
+        self.put(info_y, left + 3, clip("Songs since the player started, newest first", w - 6), "dialog")
+        buttons_y = top + h - 3
+        self.button(buttons_y, left + w // 2 - 12, " Search ", self.history_search)
+        self.button(buttons_y, left + w // 2 + 3, " Close  ", not self.history_search, cancel=True)
+
+    def draw_search_dialog(self):
+        w = min(50, self.cols - 4)
+        h = 8
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Web Search")
+
+        def centered(y, text, style):
+            text = clip(text, w - 4)
+            self.put(y, left + (w - text_width(text)) // 2, text, style)
+
+        song = self.search_song
+        centered(top + 2, "Search the web for", "dialog")
+        centered(top + 3, " – ".join(part for part in (song.get("artist"), song.get("song")) if part), "dialog_value")
+        labels = [f" {name} " for name, _, _ in SEARCH_SITES] + [" Cancel "]
+        x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
+        for i, label in enumerate(labels):
+            self.button(top + h - 3, x, label, i == self.search_choice, cancel=i == len(SEARCH_SITES))
+            x += len(label) + 3
 
     def draw_help_dialog(self):
         w = 48
@@ -1162,6 +1541,7 @@ def main():
         const="chillsynth",
         help="play a station for a few seconds without the interface, to check that audio works",
     )
+    parser.add_argument("--debug", action="store_true", help="log every key press and more, for finding bugs")
     # With --test-stream: decode the stream but don't play it, for testing on machines without sound
     parser.add_argument("--no-sound", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -1169,14 +1549,13 @@ def main():
     try:
         if args.test_stream:
             sys.exit(0 if test_stream(args.test_stream, sound=not args.no_sound) else 1)
-        RadioInterface(loglevel=logging.INFO)
+        RadioInterface(loglevel=logging.DEBUG if args.debug else logging.INFO)
     except Exception:
-        if not getattr(sys, "frozen", False):
-            raise
-        # The Windows build may have been started by double-clicking, and its window closes when it
-        # exits. Keep it open so the error can be read.
         traceback.print_exc()
-        if sys.stdin.isatty():
+        print(f"\nThe player crashed. The log is in {LOG_FILE}")
+        if getattr(sys, "frozen", False) and sys.stdin and sys.stdin.isatty():
+            # The Windows build may have been started by double-clicking, and its window closes when
+            # it exits. Keep it open so the error can be read.
             input("Press Enter to close")
         sys.exit(1)
 
