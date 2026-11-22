@@ -77,7 +77,7 @@ To run it without installing, set up a virtual environment and start `Radio.py`:
     .venv/bin/pip install -r requirements.txt
     .venv/bin/python Radio.py
 
-Settings are saved in `~/.config/nightride/settings.ini` (`%APPDATA%\nightride` on Windows) and the log goes to `~/.local/state/nightride/radio.log`. On first start, the settings are copied from [settings.ini](./settings.ini) in this folder.
+Settings are saved in `~/.config/nightride/settings.ini` (`%APPDATA%\nightride` on Windows) and the log goes to `~/.local/state/nightride/radio.log`. The log is kept across restarts, with each start and exit marked. It holds the last day, and at most about 1 MB. On first start, the settings are copied from [settings.ini](./settings.ini) in this folder.
 
 The NO AUDIO OUTPUT warning only works on Linux for now.
 
@@ -127,7 +127,7 @@ Press **v** to enable/disable the VU meter. It shows the average level of the mu
 
 Press **c** and **d** to show or hide the clock and the date. Their formats are chosen in *Settings*, or written into `settings.ini` as [strftime formats](https://strftime.org) (`clock_format`, `date_format`).
 
-Press **F3** for the songs played on the current station since the player started.
+Press **F3** for the songs played recently on the current station. They are kept for an hour when the player is closed, in `history.json` next to the log.
 
 Press **w** to search the web for the song: on Bandcamp, YouTube or Google. Choose with the arrow keys or **b**, **y** and **g**. In *Recently played*, **ENTER** searches for the chosen song. The search addresses can be changed in `settings.ini`.
 

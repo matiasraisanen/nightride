@@ -21,6 +21,8 @@ def user_dir(kind):
 # Settings and the log are kept per user, so the player can be installed as a command
 SETTINGS_FILE = os.path.join(user_dir("config"), "settings.ini")
 LOG_FILE = os.path.join(user_dir("state"), "radio.log")
+# Recently played songs, kept across restarts
+HISTORY_FILE = os.path.join(user_dir("state"), "history.json")
 # The settings that come with the code. A new user's settings start as a copy of these.
 DEFAULT_SETTINGS_FILE = os.path.join(BASE_DIR, "settings.ini")
 # The Windows build comes with its own copy of VLC, so VLC doesn't need to be installed.

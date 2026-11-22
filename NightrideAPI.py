@@ -1,6 +1,7 @@
 import collections
 import json
 import logging
+import os
 import re
 import sseclient
 import urllib3
@@ -8,7 +9,7 @@ import time
 import threading
 import settings
 from logger import Logger
-from paths import LOG_FILE
+from paths import HISTORY_FILE, LOG_FILE
 
 from AudioPlayer import AudioPlayer
 
@@ -20,6 +21,9 @@ CONNECT_TIMEOUT_SECONDS = 10
 RETRY_DELAYS = [2, 5, 10, 30]
 # Songs remembered per station for "Recently played"
 HISTORY_LENGTH = 20
+# Songs older than this are dropped from the saved history, so after a restart the list starts
+# from about the last hour
+HISTORY_KEEP_SECONDS = 60 * 60
 
 
 def clean(text):
@@ -33,7 +37,6 @@ class NightRideAPI:
             module_name=__name__,
             log_file=logfile,
             log_level=loglevel,
-            delete_old_logfile=False,
             streamhandler=False,
             filehandler=True,
         )
@@ -56,6 +59,7 @@ class NightRideAPI:
         self.now_playing = {}
         # Station => the songs played since the player started, newest last, as now_playing has them
         self.history = collections.defaultdict(lambda: collections.deque(maxlen=HISTORY_LENGTH))
+        self.load_history()
         # Whether the metadata stream is connected, and since when it hasn't been
         self.connected = False
         self.disconnected_since = time.time()
@@ -144,7 +148,45 @@ class NightRideAPI:
         history = self.history[station]
         if not history or (history[-1]["artist"], history[-1]["song"]) != (artist, title):
             history.append(song)
+            self.save_history()
         self.logger.log.debug(f"New song detected on {station}: {artist} - {title}")
+
+
+    def load_history(self):
+        # The songs saved by the last run, if they are recent enough
+        try:
+            with open(HISTORY_FILE, encoding="utf-8") as f:
+                saved = json.load(f)
+            cutoff = time.time() - HISTORY_KEEP_SECONDS
+            for station, songs in saved.items():
+                for song in songs:
+                    if song["started_at"] >= cutoff:
+                        self.history[station].append(
+                            {
+                                "artist": str(song["artist"]),
+                                "song": str(song["song"]),
+                                "started_at": float(song["started_at"]),
+                            }
+                        )
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+            self.logger.log.warning(f"Could not read the song history from {HISTORY_FILE}: {e}")
+
+    def save_history(self):
+        # Write a new file and swap it in, so the player stopping halfway can't leave it broken
+        cutoff = time.time() - HISTORY_KEEP_SECONDS
+        recent = {
+            station: [song for song in songs if song["started_at"] >= cutoff]
+            for station, songs in list(self.history.items())
+        }
+        temp_file = HISTORY_FILE + ".tmp"
+        try:
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump({station: songs for station, songs in recent.items() if songs}, f, ensure_ascii=False)
+            os.replace(temp_file, HISTORY_FILE)
+        except OSError as e:
+            self.logger.log.warning(f"Could not save the song history to {HISTORY_FILE}: {e}")
 
 
 if __name__ == "__main__":

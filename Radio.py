@@ -76,14 +76,16 @@ def rgb(color):
 
 
 # Style name => (foreground, background), per theme. A third value "underline" underlines the text.
+# Hotkeys (menu_hot, menu_sel_hot) are underlined in every theme, so they show even where their colour
+# is close to the text around them.
 # Unlit VU meter segments are grey in most themes. Some terminals brighten colours that are too dark to
 # read, and a dark shade of the lit colour would then look just like the lit segments.
 DOS_THEME = {
     "desktop": ("lightgray", "blue"),
     "menu": ("black", "lightgray"),
-    "menu_hot": ("red", "lightgray"),
+    "menu_hot": ("red", "lightgray", "underline"),
     "menu_sel": ("black", "green"),
-    "menu_sel_hot": ("red", "green"),
+    "menu_sel_hot": ("red", "green", "underline"),
     "window": ("lightgray", "blue"),
     "window_border": ("white", "blue"),
     "window_title": ("yellow", "blue"),
@@ -119,9 +121,9 @@ SYNTHWAVE_THEME = {
     **DOS_THEME,
     "desktop": ("darkpurple", "darkcharcoal"),
     "menu": ("black", "cyan"),
-    "menu_hot": ("purple", "cyan"),
+    "menu_hot": ("purple", "cyan", "underline"),
     "menu_sel": ("white", "magenta"),
-    "menu_sel_hot": ("lightcyan", "magenta"),
+    "menu_sel_hot": ("lightcyan", "magenta", "underline"),
     "window": ("lightgray", "charcoal"),
     "window_border": ("white", "charcoal"),
     "window_title": ("lightcyan", "charcoal"),
@@ -155,9 +157,9 @@ OUTRUN_THEME = {
     **DOS_THEME,
     "desktop": ("purple", "black"),
     "menu": ("black", "orange"),
-    "menu_hot": ("navy", "orange"),
+    "menu_hot": ("purple", "orange", "underline"),
     "menu_sel": ("white", "hotpink"),
-    "menu_sel_hot": ("yellow", "hotpink"),
+    "menu_sel_hot": ("yellow", "hotpink", "underline"),
     "window": ("pale", "navy"),
     "window_border": ("pink", "navy"),
     "window_title": ("yellow", "navy"),
@@ -190,9 +192,9 @@ DARKSYNTH_THEME = {
     **DOS_THEME,
     "desktop": ("deepred", "black"),
     "menu": ("lightgray", "slate"),
-    "menu_hot": ("brightred", "slate"),
+    "menu_hot": ("brightred", "slate", "underline"),
     "menu_sel": ("white", "blood"),
-    "menu_sel_hot": ("black", "blood"),
+    "menu_sel_hot": ("black", "blood", "underline"),
     "window": ("lightgray", "nearblack"),
     "window_border": ("blood", "nearblack"),
     "window_title": ("brightred", "nearblack"),
@@ -229,7 +231,7 @@ C64_THEME = {
     "menu": ("white", "c64border"),
     "menu_hot": ("white", "c64border", "underline"),
     "menu_sel": ("c64light", "c64dark"),
-    "menu_sel_hot": ("white", "c64dark"),
+    "menu_sel_hot": ("white", "c64dark", "underline"),
     "window": ("c64light", "c64dark"),
     "window_border": ("c64light", "c64dark"),
     "window_title": ("white", "c64dark"),
@@ -326,7 +328,7 @@ STATUS_HINTS = {
     "menu": [("←→", "Menus"), ("↑↓", "Select"), ("Enter", "Choose"), ("Esc", "Close")],
     "stations": [("↑↓", "Station"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Cancel")],
     "history": [("↑↓", "Song"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Close")],
-    "search": [("←→", "Site"), ("B Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
+    "search": [("←→↑↓", "Move"), ("B Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
     "about": [("Enter", "Close")],
     "help": [("↑↓", "Scroll"), ("Enter", "Close")],
     "exit": [("←→", "Move"), ("Enter", "Select"), ("Y", "Yes"), ("N", "No"), ("Esc", "Cancel")],
@@ -374,11 +376,13 @@ NOTIFICATIONS = {
 
 # Web search sites: (name, setting with its address, whether the station's name is added to the search).
 # Bandcamp and YouTube look for every word, so only Google gets the station.
+# Bandcamp comes first and has focus when the dialog opens, with Cancel right below it.
 SEARCH_SITES = [
     ("Bandcamp", "bandcamp_search", False),
     ("YouTube", "youtube_search", False),
     ("Google", "google_search", True),
 ]
+SEARCH_DEFAULT = 0
 
 # Formats to choose from in the settings. settings.ini can have any other strftime format.
 CLOCK_FORMATS = ["%H:%M", "%H:%M:%S", "%I:%M %p"]
@@ -470,10 +474,11 @@ class RadioInterface:
             module_name=__name__,
             log_file=logfile,
             log_level=loglevel,
-            delete_old_logfile=True,
             streamhandler=False,
             filehandler=True,
         )
+        # The log is kept across restarts, so mark where each run starts and ends
+        self.logger.log.info("===== Player started =====")
 
         ### Read config ###
         self.config = settings.load()
@@ -537,7 +542,9 @@ class RadioInterface:
         self.history_search = True
         # Web search dialog: the song, the site with focus, and the screen to go back to
         self.search_song = {}
-        self.search_choice = 0
+        self.search_choice = SEARCH_DEFAULT
+        # The site to go back to from Cancel
+        self.search_site = SEARCH_DEFAULT
         self.search_return = "main"
         # Exit dialog: whether "Yes" has focus
         self.exit_yes = True
@@ -570,6 +577,7 @@ class RadioInterface:
             # Clear our title, then restore the saved one. Terminals that can't restore titles are
             # left with an empty one, which most show as their default.
             write_terminal(SET_TITLE.format(""), RESTORE_TITLE)
+            self.logger.log.info("===== Player exited =====")
         self.api.audioPlayer.shutdown()
 
     def main(self):
@@ -802,18 +810,26 @@ class RadioInterface:
             self.mode = "main"
 
     def search_dialog_key(self, key):
-        # The choices are the sites and, last, Cancel
-        choices = len(SEARCH_SITES) + 1
-        if key in ("KEY_LEFT", "KEY_BTAB"):
-            self.search_choice = (self.search_choice - 1) % choices
-        elif key in ("KEY_RIGHT", "KEY_TAB"):
-            self.search_choice = (self.search_choice + 1) % choices
-        elif key in ENTER_KEYS and self.search_choice < len(SEARCH_SITES):
+        # The choices are the sites in a row and, on the row below, Cancel
+        sites = len(SEARCH_SITES)
+        on_cancel = self.search_choice == sites
+        if key in ("KEY_TAB", "KEY_BTAB"):
+            self.search_choice = (self.search_choice + (1 if key == "KEY_TAB" else -1)) % (sites + 1)
+        elif key in ("KEY_LEFT", "KEY_RIGHT") and not on_cancel:
+            self.search_choice = (self.search_choice + (1 if key == "KEY_RIGHT" else -1)) % sites
+        elif key == "KEY_DOWN" and not on_cancel:
+            self.search_site = self.search_choice
+            self.search_choice = sites
+        elif key == "KEY_UP" and on_cancel:
+            # Back to the site that had focus before
+            self.search_choice = self.search_site
+        elif key in ENTER_KEYS and self.search_choice < sites:
             self.web_search(self.search_choice)
         elif key in ENTER_KEYS:
             self.mode = self.search_return
         elif len(key) == 1 and key.lower() in "byg":
-            self.web_search("byg".index(key.lower()))
+            # Each site by its first letter
+            self.web_search([name[0].lower() for name, _, _ in SEARCH_SITES].index(key.lower()))
         elif key == "KEY_ESCAPE":
             self.mode = self.search_return
 
@@ -933,7 +949,7 @@ class RadioInterface:
             return
         self.mode = "search"
         self.search_song = song
-        self.search_choice = 0
+        self.search_choice = self.search_site = SEARCH_DEFAULT
         self.search_return = back_to
 
     def web_search(self, choice):
@@ -1426,14 +1442,14 @@ class RadioInterface:
             self.put(top + 1 + self.history_height, bar_x, "▼", "dialog")
 
         info_y = top + self.history_height + 3
-        self.put(info_y, left + 3, clip("Songs since the player started, newest first", w - 6), "dialog")
+        self.put(info_y, left + 3, clip("Songs from about the last hour, newest first", w - 6), "dialog")
         buttons_y = top + h - 3
         self.button(buttons_y, left + w // 2 - 12, " Search ", self.history_search)
         self.button(buttons_y, left + w // 2 + 3, " Close  ", not self.history_search, cancel=True)
 
     def draw_search_dialog(self):
-        w = min(50, self.cols - 4)
-        h = 8
+        w = 44
+        h = 10
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Web Search")
@@ -1445,11 +1461,13 @@ class RadioInterface:
         song = self.search_song
         centered(top + 2, "Search the web for", "dialog")
         centered(top + 3, " – ".join(part for part in (song.get("artist"), song.get("song")) if part), "dialog_value")
-        labels = [f" {name} " for name, _, _ in SEARCH_SITES] + [" Cancel "]
-        x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
+        labels = [f" {name} " for name, _, _ in SEARCH_SITES]
+        x = first_x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
         for i, label in enumerate(labels):
-            self.button(top + h - 3, x, label, i == self.search_choice, cancel=i == len(SEARCH_SITES))
+            self.button(top + 5, x, label, i == self.search_choice)
             x += len(label) + 3
+        # Cancel goes below the first site
+        self.button(top + 7, first_x, " Cancel ", self.search_choice == len(SEARCH_SITES), cancel=True)
 
     def draw_help_dialog(self):
         w = 48

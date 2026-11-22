@@ -42,7 +42,6 @@ class LevelMeter:
             module_name=__name__,
             log_file=logfile,
             log_level=loglevel,
-            delete_old_logfile=False,
             streamhandler=False,
             filehandler=True,
         )
