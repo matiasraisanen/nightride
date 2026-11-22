@@ -445,6 +445,28 @@ SAVE_TITLE = "\x1b[22;2t"
 RESTORE_TITLE = "\x1b[23;2t"
 
 
+def on_windows_close(callback):
+    # Calls callback when the console window is closed, or Windows logs off or shuts down. Windows
+    # ends the process a few seconds later whatever happens, so callback must be quick.
+    # Ctrl-C and Ctrl-Break are left to Python. Returns the handler, which must be kept: if it were
+    # garbage collected, Windows would call freed memory.
+    import ctypes
+    from ctypes import wintypes
+
+    # CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT
+    close_events = {2, 5, 6}
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+    def handler(event):
+        if event in close_events:
+            callback()
+            return True
+        return False
+
+    ctypes.windll.kernel32.SetConsoleCtrlHandler(handler, True)
+    return handler
+
+
 def write_terminal(*sequences):
     # Sends control sequences that don't draw anything
     if sys.stdout and sys.stdout.isatty():
@@ -558,6 +580,9 @@ class RadioInterface:
             import msvcrt
 
             msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        if sys.platform == "win32":
+            # Closing the window ends the program at once, without reaching the end of this method
+            self.close_handler = on_windows_close(self.on_window_closed)
         self.term = blessed.Terminal()
         self.screen = Screen(self.term)
         # The window title shown, and the terminal's own title saved to put back on exit
@@ -1046,6 +1071,12 @@ class RadioInterface:
     def step_theme(self, step):
         names = list(THEMES)
         self.set_theme(names[(names.index(self.saved_theme) + step) % len(names)])
+
+    def on_window_closed(self):
+        # Called from another thread when the console window is closed. Windows ends the process
+        # right after, so only log it and stop the stream.
+        self.logger.log.info("===== Player exited (window closed) =====")
+        self.api.audioPlayer.shutdown(timeout=1.0)
 
     def update_title(self):
         # The song and station in the terminal's window or tab title, for when the player is in the background
