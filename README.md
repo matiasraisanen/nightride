@@ -140,7 +140,7 @@ Press **Alt-X** or **F12** to quit, or **ESC** to get asked first.
 The player looks best in an 80 by 25 terminal, like in the old days. It needs at least 50 columns by 14 rows, or 16 with the VU meter on.  
 If your terminal uses Esc, F10 or other keys for its own actions, those keys won't reach the player. Unbind them in the terminal's settings.  
 On Linux, the VU meter needs `parec` and `pactl`, which come with PulseAudio and PipeWire (package `pulseaudio-utils` on Debian and Ubuntu).  
-On Windows, it reads the same meter as the Windows volume mixer. That meter gives the loudest samples rather than the average, so the bars run a bit higher than on Linux.  
+On Windows, it reads the same meter as the Windows volume mixer. That meter gives the loudest samples rather than the average, so the player takes 9 dB off them to read like the Linux meter.  
 It measures the music itself, so the volume setting doesn't change it, but it drops to zero while muted.  
 On terminals with true colour, like Konsole and Windows Terminal, the themes show their exact colours regardless of your terminal's colour theme. Other terminals get the closest colours they have.
 

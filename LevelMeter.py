@@ -21,6 +21,9 @@ CHUNK_FRAMES = RATE // 20  # 50 ms of audio per measurement
 CHUNK_BYTES = CHUNK_FRAMES * 2 * 4  # stereo, 32-bit float
 # On Windows, the session's peak meter is read this often, and the highest value is shown every 50 ms
 WIN_POLL_SECONDS = 0.01
+# Windows gives the loudest samples, which in music run about 9 dB above the average level the Linux
+# meter shows (measured on chillsynth and ebsm). Taken off, so both meters read alike.
+WIN_PEAK_TO_AVERAGE_DB = 9.0
 FLOOR_DB = -40.0  # Level shown as an empty meter
 CEILING_DB = 0.0  # Level shown as a full meter
 DECAY_DB_PER_SECOND = 24.0
@@ -35,7 +38,8 @@ class LevelMeter:
     # volume is applied, so we add the volume back to show the level of the music itself.
     #
     # On Windows, we find our audio session by process id and read its peak meter (see win_audio.py).
-    # The meter gives the loudest samples rather than the average, so the bars run a bit higher there.
+    # That meter measures before the volume is applied, so nothing is added back. It gives the loudest
+    # samples rather than the average, so WIN_PEAK_TO_AVERAGE_DB is taken off.
 
     def __init__(self, loglevel=logging.INFO, logfile: str = LOG_FILE):
         self.logger = Logger(
@@ -159,8 +163,9 @@ class LevelMeter:
             return None
 
     def meter_session(self, session):
-        self.logger.log.debug(f"Reading the audio session's meter for the VU meter, {session.channels} channels")
-        gain_db = session.gain_db()
+        self.logger.log.debug("Reading the audio session's meter for the VU meter")
+        # -inf mutes the meter, 0 leaves the levels as they are
+        gain_db = -math.inf if session.silenced() else 0.0
         checked = time.time()
         # The highest raw peaks in the last second, for the debug log
         second_peaks = [0.0, 0.0]
@@ -171,7 +176,7 @@ class LevelMeter:
             while time.time() < end:
                 peaks = [max(old, new) for old, new in zip(peaks, session.peaks())]
                 time.sleep(WIN_POLL_SECONDS)
-            self.update([self.to_db(value) for value in peaks], gain_db)
+            self.update([self.to_db(value) - WIN_PEAK_TO_AVERAGE_DB for value in peaks], gain_db)
             second_peaks = [max(old, new) for old, new in zip(second_peaks, peaks)]
 
             # Follow volume changes, and notice if the sound has moved, e.g. to another output device
@@ -182,14 +187,14 @@ class LevelMeter:
                     raw = ", ".join(f"{value:.3f} ({self.to_db(value):.1f} dB)" for value in second_peaks)
                     shown = ", ".join(f"{level:.1f}" for level in self.levels)
                     self.logger.log.debug(
-                        f"VU meter: raw peaks {raw}, session volume {volume:.3f} ({gain_db:+.1f} dB), "
+                        f"VU meter: raw peaks {raw}, {session.channels} channels, session volume {volume:.3f}, "
                         f"muted {muted}, shown {shown} dB"
                     )
                 second_peaks = [0.0, 0.0]
                 session = self.find_session()
                 if session is None:
                     return
-                gain_db = session.gain_db()
+                gain_db = -math.inf if session.silenced() else 0.0
 
     ### Both ###
 

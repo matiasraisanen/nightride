@@ -1,6 +1,5 @@
 # Finds the player's own audio session on Windows, and reads its level from the session's peak meter.
 # That is the same meter the Windows volume mixer shows for each app.
-import math
 import os
 from ctypes import HRESULT, POINTER, c_float
 from ctypes.wintypes import DWORD, UINT
@@ -41,15 +40,22 @@ class Session:
         # pycaw doesn't offer the meter, so ask the session control for it directly
         self.meter = session._ctl.QueryInterface(IAudioMeterInformation)
         self.volume = session._ctl.QueryInterface(ISimpleAudioVolume)
-        self.channels = self.meter.GetMeteringChannelCount()
-        self.values = (c_float * max(1, self.channels))()
+        self.channels = 0
+        self.values = (c_float * 1)()
 
     def peaks(self):
-        # [left, right] highest sample values (0 to 1) of the sound playing right now.
-        # Mono is shown on both sides, and only the first two channels of surround sound are used.
-        if self.channels == 0:
+        # [left, right] highest sample values (0 to 1) of the sound playing right now, before the
+        # session's volume is applied. Mono is shown on both sides, and only the first two channels
+        # of surround sound are used.
+        # The channel count is asked every time: it is 0 until VLC starts playing, and can change when
+        # VLC opens its output again. Asking for the wrong number of channels is an error.
+        channels = self.meter.GetMeteringChannelCount()
+        if channels == 0:
             return [0.0, 0.0]
-        self.meter.GetChannelsPeakValues(self.channels, self.values)
+        if channels != self.channels:
+            self.channels = channels
+            self.values = (c_float * channels)()
+        self.meter.GetChannelsPeakValues(channels, self.values)
         values = list(self.values)
         return values[:2] if len(values) >= 2 else values * 2
 
@@ -57,13 +63,11 @@ class Session:
         # (the session's volume from 0 to 1, whether it is muted)
         return self.volume.GetMasterVolume(), bool(self.volume.GetMute())
 
-    def gain_db(self):
-        # The session's volume in dB, -inf when muted. VLC sets its volume here, and the meter
-        # measures the sound after it, so this is added back to get the level of the music itself.
+    def silenced(self):
+        # Whether the session is muted or at zero volume. The meter measures the sound before the
+        # volume is applied, so it would otherwise keep moving while nothing is heard.
         volume, muted = self.volume_setting()
-        if muted:
-            return -math.inf
-        return 20 * math.log10(volume) if volume > 0 else -math.inf
+        return muted or volume <= 0
 
 
 def find_own_session():
