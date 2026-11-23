@@ -27,7 +27,7 @@ DEFAULTS = {
         "7": "ebsm",
     },
     "SETTINGS": {
-        "vu_meter": "False",
+        "vu_meter": "True",
         # A station's name, or "last" for the one played last
         "default_station": "last",
         "last_station": "chillsynth",
