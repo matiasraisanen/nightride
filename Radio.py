@@ -1,4 +1,5 @@
 import argparse
+import base64
 import logging
 import os
 import shutil
@@ -364,7 +365,38 @@ HELP = [
     ("↑↓  ←→  Tab", "Move"),
     ("Enter", "Choose"),
     ("Esc", "Close or cancel"),
+    None,
+    ("Mouse", None),
+    ("Click", "Menus, buttons, key hints"),
+    ("Double-click", "Play or search in a list"),
+    ("Wheel", "Volume, or scroll a list"),
+    ("Click volume", "◄ ► step, bar sets level"),
+    ("Click number", "Mute"),
+    ("Click station", "Browse stations"),
+    ("Click song", "Web search"),
 ]
+
+# Status line hints that do something when clicked: the hint's key => the key it sends
+HINT_KEYS = {
+    "F1": "KEY_F1",
+    "F2": "KEY_F2",
+    "F10": "KEY_F10",
+    "Alt-X": "ALT_x",
+    "Enter": "\n",
+    "Esc": "KEY_ESCAPE",
+    "Tab": "KEY_TAB",
+    "Space": " ",
+    "Y": "y",
+    "N": "n",
+}
+
+# Mouse reporting: clicks (1000), sent in the SGR format (1006) that has no limit on the column
+MOUSE_MODES = (1000, 1006)
+# Two clicks on the same spot within this many seconds are a double-click
+DOUBLE_CLICK_SECONDS = 0.4
+
+AUTHOR_EMAIL = "matias@matiasraisanen.com"
+REPOSITORY = "github.com/matiasraisanen/nightride"
 
 # Focusable items in the settings dialog, top to bottom
 SETTINGS_START, SETTINGS_VOLUME, SETTINGS_CLOCK, SETTINGS_DATE, SETTINGS_NOTIFY, SETTINGS_OK, SETTINGS_CANCEL = range(7)
@@ -508,6 +540,72 @@ SAVE_TITLE = "\x1b[22;2t"
 RESTORE_TITLE = "\x1b[23;2t"
 
 
+def copy_to_clipboard(text):
+    # Copies text with the system's own tool. Returns whether one was found.
+    if sys.platform == "win32":
+        commands = [["clip"]]
+    elif sys.platform == "darwin":
+        commands = [["pbcopy"]]
+    else:
+        commands = [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
+        if not os.environ.get("WAYLAND_DISPLAY"):
+            commands = commands[1:]
+    for command in commands:
+        if shutil.which(command[0]):
+            # wl-copy and xclip stay in the background to hand out the text, so don't wait for them
+            # to finish, and keep them off the terminal
+            process = subprocess.Popen(
+                command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            process.communicate(text.encode(), timeout=2)
+            return True
+    # Many terminals can set the clipboard themselves (OSC 52), but don't say whether they did
+    write_terminal(f"\x1b]52;c;{base64.b64encode(text.encode()).decode()}\x07")
+    return False
+
+
+class WindowsConsoleMouse:
+    # In cmd.exe and other classic console windows, QuickEdit mode makes a click select text, and
+    # the program never sees it. It is turned off while the mouse is on, and put back after.
+    ENABLE_MOUSE_INPUT = 0x10
+    ENABLE_QUICK_EDIT_MODE = 0x40
+    ENABLE_EXTENDED_FLAGS = 0x80
+
+    def __init__(self):
+        import ctypes
+
+        self.kernel32 = ctypes.windll.kernel32
+        self.handle = self.kernel32.GetStdHandle(-10)
+        self.saved = None
+
+    def get_mode(self):
+        import ctypes
+
+        mode = ctypes.c_uint32()
+        if not self.kernel32.GetConsoleMode(self.handle, ctypes.byref(mode)):
+            return None
+        return mode.value
+
+    def enable(self):
+        mode = self.get_mode()
+        if mode is None:
+            return
+        self.saved = mode
+        mode = (mode | self.ENABLE_MOUSE_INPUT | self.ENABLE_EXTENDED_FLAGS) & ~self.ENABLE_QUICK_EDIT_MODE
+        self.kernel32.SetConsoleMode(self.handle, mode)
+
+    def disable(self):
+        # Puts QuickEdit back as it was, keeping whatever else changed meanwhile
+        mode = self.get_mode()
+        if mode is None or self.saved is None:
+            return
+        quick_edit = self.saved & self.ENABLE_QUICK_EDIT_MODE
+        mouse = self.saved & self.ENABLE_MOUSE_INPUT
+        mode = (mode & ~(self.ENABLE_QUICK_EDIT_MODE | self.ENABLE_MOUSE_INPUT)) | quick_edit | mouse
+        self.kernel32.SetConsoleMode(self.handle, mode | self.ENABLE_EXTENDED_FLAGS)
+        self.saved = None
+
+
 def on_windows_close(callback):
     # Calls callback when the console window is closed, or Windows logs off or shuts down. Windows
     # ends the process a few seconds later whatever happens, so callback must be quick.
@@ -574,6 +672,17 @@ class RadioInterface:
         self.VU_METER = settings.get_bool(self.config, "SETTINGS", "vu_meter")
         self.level_meter = LevelMeter(loglevel=loglevel, logfile=logfile)
         self.level_meter.enabled = self.VU_METER
+        self.MOUSE = settings.get_bool(self.config, "SETTINGS", "mouse")
+        # Whether the terminal is reporting the mouse right now
+        self.mouse_on = False
+        self.windows_mouse = None
+        # Clickable areas of the screen, made again on every draw: (row, first column, end column,
+        # action). Later ones are on top.
+        self.zones = []
+        # The last click (time, row, column), to notice double-clicks, and whether the click being
+        # handled is one
+        self.last_click = (0.0, -1, -1)
+        self.double_click = False
         self.CLOCK = settings.get_bool(self.config, "SETTINGS", "clock")
         self.DATE = settings.get_bool(self.config, "SETTINGS", "date")
         self.theme = self.config["SETTINGS"]["theme"]
@@ -679,12 +788,36 @@ class RadioInterface:
     def main(self):
         self.init_styles()
         self.set_station(self.station)
-        while self.running:
-            self.read_keys()
-            self.check_new_song()
-            self.save_last_volume()
-            self.update_title()
-            self.draw()
+        self.set_mouse(self.MOUSE)
+        try:
+            while self.running:
+                self.read_keys()
+                self.check_new_song()
+                self.save_last_volume()
+                self.update_title()
+                self.draw()
+        finally:
+            self.set_mouse(False)
+
+    def set_mouse(self, on):
+        # Starts or stops the terminal reporting clicks and the wheel
+        if on == self.mouse_on:
+            return
+        try:
+            if on:
+                if sys.platform == "win32":
+                    self.windows_mouse = self.windows_mouse or WindowsConsoleMouse()
+                    self.windows_mouse.enable()
+                # Turned on directly: blessed's own way first asks the terminal whether it can, and
+                # some terminals never answer
+                self.term._dec_mode_set_enabled(*MOUSE_MODES)
+            else:
+                self.term._dec_mode_set_disabled(*MOUSE_MODES)
+                if self.windows_mouse:
+                    self.windows_mouse.disable()
+            self.mouse_on = on
+        except Exception:
+            self.logger.log.exception("Could not turn the mouse " + ("on" if on else "off"))
 
     def init_styles(self):
         # Called again when the theme changes
@@ -694,6 +827,8 @@ class RadioInterface:
             if "underline" in flags:
                 style += term.underline
             self.screen.styles[name] = style
+        # Clickable links: dialog values, underlined
+        self.screen.styles["link"] = self.screen.styles["dialog_value"] + term.underline
         self.screen.invalidate()
 
     ### Input ###
@@ -707,9 +842,12 @@ class RadioInterface:
             name = key.name or str(key)
             if name.startswith("KEY_ALT_") and len(name) == len("KEY_ALT_") + 1:
                 name = f"ALT_{name[-1].lower()}"
-            self.logger.log.debug(f"User pressed key {name!r} ({str(key)!r})")
             try:
-                self.handle_key(name)
+                if name.startswith("MOUSE_"):
+                    self.handle_mouse(name, *key.mouse_yx)
+                else:
+                    self.logger.log.debug(f"User pressed key {name!r} ({str(key)!r})")
+                    self.handle_key(name)
             except Exception:
                 # One bad key shouldn't stop the music
                 self.logger.log.exception(f"Error handling key {name!r} ({str(key)!r})")
@@ -752,6 +890,48 @@ class RadioInterface:
         if theme != self.theme:
             self.theme = theme
             self.init_styles()
+
+    def handle_mouse(self, name, y, x):
+        # Names are like MOUSE_LEFT, MOUSE_CTRL_LEFT, MOUSE_LEFT_RELEASED and MOUSE_SCROLL_UP
+        if "RELEASED" in name or "MOTION" in name:
+            return
+        self.logger.log.debug(f"Mouse {name} at row {y}, column {x}")
+        if "SCROLL_UP" in name or "SCROLL_DOWN" in name:
+            self.wheel(-1 if "SCROLL_UP" in name else 1)
+        elif name.endswith("_LEFT"):
+            self.click(y, x)
+        self.preview_theme()
+
+    def wheel(self, step):
+        # Volume by one on the main screen, otherwise moves in the list that is open
+        if self.mode == "main":
+            self.change_volume(-step)
+        elif self.mode in ("stations", "history", "help", "menu"):
+            self.handle_key("KEY_DOWN" if step > 0 else "KEY_UP")
+
+    def click(self, y, x):
+        now = time.time()
+        last_time, last_y, last_x = self.last_click
+        self.double_click = now - last_time < DOUBLE_CLICK_SECONDS and (y, x) == (last_y, last_x)
+        # A double-click doesn't start another one
+        self.last_click = (0.0, -1, -1) if self.double_click else (now, y, x)
+        for row, start, end, action in reversed(self.zones):
+            if row == y and start <= x < end:
+                if action:
+                    action()
+                return
+        if self.mode == "menu":
+            # A click outside an open menu closes it
+            self.mode = "main"
+
+    def zone(self, y, x, width, action):
+        # Makes width columns from (y, x) clickable. action None only stops clicks reaching what is below.
+        self.zones.append((y, x, x + width, action))
+
+    def block(self, y, x, h, w):
+        # Stops clicks on a window from reaching what is under it
+        for row in range(y, y + h):
+            self.zone(row, x, w, None)
 
     def main_key(self, key):
         if key in DIGITS and 1 <= int(key) <= min(9, len(self.stations)):
@@ -1003,6 +1183,7 @@ class RadioInterface:
                     ("~V~U meter", "V", self.toggle_vu_meter, self.VU_METER, True),
                     ("~C~lock", "C", self.toggle_clock, self.CLOCK, True),
                     ("~D~ate", "D", self.toggle_date, self.DATE, True),
+                    ("Mo~u~se", None, self.toggle_mouse, self.MOUSE, True),
                     None,
                     ("~S~ettings...", None, self.open_settings, False, False),
                 ],
@@ -1049,6 +1230,54 @@ class RadioInterface:
 
     def open_about(self):
         self.mode = "about"
+
+    ### Clicks ###
+
+    def close_dialog(self):
+        self.mode = "main"
+
+    def click_menu(self, index):
+        # A click on a menu's title opens it, or closes it if it is open
+        if self.mode == "menu" and self.menu_index == index:
+            self.mode = "main"
+        else:
+            self.open_menu(index)
+
+    def click_menu_item(self, index):
+        self.menu_item = index
+        self.run_menu_item(self.menus()[self.menu_index][1][index])
+
+    def click_station(self, index):
+        self.dialog_sel = index
+        self.browse_play = True
+        if self.double_click:
+            self.play_selected_station()
+
+    def play_selected_station(self):
+        self.browse_play = True
+        self.station_dialog_key("\n")
+
+    def click_setting(self, field, key=None):
+        # Chooses a field in the settings, and does what key would do there. The picker field opens.
+        self.settings_field = field
+        if key:
+            self.settings_dialog_key(key)
+        elif field == SETTINGS_NOTIFY:
+            self.open_notifications()
+
+    def click_notification(self, field, key):
+        self.notify_field = field
+        self.notifications_dialog_key(key)
+
+    def click_history(self, index):
+        self.history_sel = index
+        self.history_search = True
+        if self.double_click:
+            self.history_button(True)
+
+    def history_button(self, search):
+        self.history_search = search
+        self.history_dialog_key("\n")
 
     def open_website(self):
         url = self.config["URLS"]["website"]
@@ -1199,6 +1428,35 @@ class RadioInterface:
         self.save_config()
         self.notify(f"Clock {'on' if self.CLOCK else 'off'}")
 
+    def toggle_mouse(self):
+        self.MOUSE = not self.MOUSE
+        self.set_mouse(self.MOUSE)
+        self.config.set("SETTINGS", "mouse", f"{self.MOUSE}")
+        self.save_config()
+        self.notify(f"Mouse {'on' if self.MOUSE else 'off'}")
+
+    def set_volume(self, volume):
+        # A volume picked with the mouse
+        self.volume = min(MAX_VOLUME, max(0, volume))
+        self.muted = False
+        self.apply_volume()
+        self.volume_changed_at = time.time()
+
+    def copy_email(self):
+        if copy_to_clipboard(AUTHOR_EMAIL):
+            self.notify("Copied the email address")
+        else:
+            self.notify("Copied the email address, if the terminal allows it")
+
+    def open_repository(self):
+        url = f"https://{REPOSITORY}"
+        try:
+            open_url(url)
+            self.notify("Opened GitHub in the browser")
+        except OSError as e:
+            self.logger.log.error(f"Could not open {url}: {e}")
+            self.notify("Could not open the browser", kind="error")
+
     def toggle_date(self):
         self.DATE = not self.DATE
         self.config.set("SETTINGS", "date", f"{self.DATE}")
@@ -1295,14 +1553,17 @@ class RadioInterface:
             self.put(y, x + (w - len(title)) // 2, title, title_style or style)
 
     def window(self, y, x, h, w, body_style, border_style, title=None, title_style=None, double=True):
-        # A filled box with a drop shadow
+        # A filled box with a drop shadow. Clicks on it don't reach what is under it.
+        self.block(y, x, h, w)
         self.fill(y + 1, x + w, h, 2, "shadow")
         self.fill(y + h, x + 2, 1, w, "shadow")
         self.fill(y, x, h, w, body_style)
         self.box(y, x, h, w, border_style, double, title, title_style)
 
-    def button(self, y, x, label, focused=False, cancel=False):
-        # Cancel buttons are red, others green
+    def button(self, y, x, label, focused=False, cancel=False, action=None):
+        # Cancel buttons are red, others green. action runs when it is clicked.
+        if action:
+            self.zone(y, x, len(label), action)
         style = "button_cancel" if cancel else "button"
         if focused:
             # Mark the focused button with arrows, keeping its width
@@ -1317,6 +1578,7 @@ class RadioInterface:
     def draw(self):
         self.screen.begin()
         self.rows, self.cols = self.screen.height, self.screen.width
+        self.zones = []
 
         # Room for the menu bar, the main window and its shadow, and the status line
         min_rows = self.window_height() + 3
@@ -1360,6 +1622,8 @@ class RadioInterface:
             selected = self.mode == "menu" and i == self.menu_index
             style, hot_style = ("menu_sel", "menu_sel_hot") if selected else ("menu", "menu_hot")
             self.put_marked(0, x, f" {title} ", style, hot_style)
+            if self.mode in ("main", "menu"):
+                self.zone(0, x, visible_len(title) + 2, lambda i=i: self.click_menu(i))
             self.menu_x.append(x)
             x += visible_len(title) + 2
         parts = []
@@ -1387,6 +1651,8 @@ class RadioInterface:
                 break
             self.put(y, x, key, "menu_hot")
             self.put(y, x + len(key) + 1, label, "menu")
+            if key in HINT_KEYS:
+                self.zone(y, x, width, lambda k=HINT_KEYS[key]: self.handle_key(k))
             x += width + 2
         if time.time() < self.message_until:
             # A message shows for a moment on the row above, at its start
@@ -1409,6 +1675,18 @@ class RadioInterface:
 
         def separator(y):
             self.put(y, left, "╟" + "─" * (w - 2) + "╢", "window_border")
+
+        if self.mode == "main":
+            # Only when no menu or dialog is open
+            self.zone(top + 2, label_x, w - 6, self.open_station_dialog)
+            self.zone(top + 4, label_x, w - 6, self.open_search)
+            self.zone(top + 5, label_x, w - 6, self.open_search)
+            self.zone(top + 8, value_x, 1, lambda: self.change_volume(-10))
+            for i in range(10):
+                # Each block of the bar is 10: the first sets 10, the last 99
+                self.zone(top + 8, value_x + 1 + i, 1, lambda i=i: self.set_volume((i + 1) * 10))
+            self.zone(top + 8, value_x + 11, 1, lambda: self.change_volume(10))
+            self.zone(top + 8, value_x + 13, 7, self.toggle_mute)
 
         number = self.stations.index(self.station) + 1
         self.put(top + 2, label_x, f"Station {number}", "label")
@@ -1497,6 +1775,7 @@ class RadioInterface:
                 self.put(row, x, "├" + "─" * (w - 2) + "┤", "menu")
                 continue
             label, shortcut, action, checked, toggle = item
+            self.zone(row, x + 1, w - 2, lambda i=i: self.click_menu_item(i))
             selected = i == self.menu_item
             style, hot_style = ("menu_sel", "menu_sel_hot") if selected else ("menu", "menu_hot")
             self.fill(row, x + 1, 1, w - 2, style)
@@ -1532,6 +1811,7 @@ class RadioInterface:
             playing = "♪" if station == self.station else " "
             text = f" {i + 1:>2}  {station}".ljust(list_w - 4) + playing + " "
             self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.dialog_sel else "list")
+            self.zone(top + 2 + row, list_x + 1, len(text), lambda i=i: self.click_station(i))
 
         if count > self.list_height:
             # Scroll bar on the right edge of the list
@@ -1552,8 +1832,8 @@ class RadioInterface:
         self.put(info_y + 1, left + 11, self.marquee("browse_song", info.get("song", ""), w - 14), "dialog_value")
 
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.browse_play)
-        self.button(buttons_y, left + w // 2 + 3, " Cancel ", not self.browse_play, cancel=True)
+        self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.browse_play, action=self.play_selected_station)
+        self.button(buttons_y, left + w // 2 + 3, " Cancel ", not self.browse_play, cancel=True, action=self.close_dialog)
 
     def draw_settings_dialog(self):
         w = 44
@@ -1581,10 +1861,30 @@ class RadioInterface:
             y = top + 2 + i * 2
             self.put(y, left + 3, label, "dialog")
             self.put(y, left + 21, f" {value} ", "list_sel" if i == self.settings_field else "list")
+            if self.mode == "settings":
+                # A click on the field chooses it, on its arrows changes it. The picker opens on a click.
+                self.zone(y, left + 3, w - 6, lambda i=i: self.click_setting(i))
+                if i != SETTINGS_NOTIFY:
+                    self.zone(y, left + 21, 3, lambda i=i: self.click_setting(i, "KEY_LEFT"))
+                    self.zone(y, left + 21 + len(value) - 1, 3, lambda i=i: self.click_setting(i, "KEY_RIGHT"))
 
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.settings_field == SETTINGS_OK)
-        self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.settings_field == SETTINGS_CANCEL, cancel=True)
+        clickable = self.mode == "settings"
+        self.button(
+            buttons_y,
+            left + w // 2 - 12,
+            "   OK   ",
+            self.settings_field == SETTINGS_OK,
+            action=clickable and (lambda: self.click_setting(SETTINGS_OK, "\n")),
+        )
+        self.button(
+            buttons_y,
+            left + w // 2 + 3,
+            " Cancel ",
+            self.settings_field == SETTINGS_CANCEL,
+            cancel=True,
+            action=clickable and self.close_dialog,
+        )
 
     def draw_notifications_dialog(self):
         w = 32
@@ -1598,11 +1898,18 @@ class RadioInterface:
             mark = "√" if kind in self.notify_kinds else " "
             text = f" [{mark}] {label:<{w - 12}}"
             self.put(top + 2 + i, left + 3, text, "list_sel" if i == self.notify_field else "list")
+            self.zone(top + 2 + i, left + 3, len(text), lambda i=i: self.click_notification(i, " "))
         self.put(top + 3 + boxes, left + 3, "Errors always show.", "dialog")
 
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.notify_field == boxes)
-        self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.notify_field == boxes + 1, cancel=True)
+        self.button(
+            buttons_y, left + w // 2 - 12, "   OK   ", self.notify_field == boxes,
+            action=lambda: self.click_notification(boxes, "\n"),
+        )
+        self.button(
+            buttons_y, left + w // 2 + 3, " Cancel ", self.notify_field == boxes + 1, cancel=True,
+            action=lambda: self.click_notification(boxes + 1, "\n"),
+        )
 
     def draw_history_dialog(self):
         songs = self.history_songs()
@@ -1633,6 +1940,7 @@ class RadioInterface:
             name = " – ".join(part for part in (song["artist"], song["song"]) if part)
             text = clip(f" {started}  {name}", list_w - 3).ljust(list_w - 2)
             self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.history_sel else "list")
+            self.zone(top + 2 + row, list_x + 1, list_w - 2, lambda i=i: self.click_history(i))
         bar_x = list_x + list_w - 1
         if self.history_scroll > 0:
             self.put(top + 2, bar_x, "▲", "dialog")
@@ -1642,8 +1950,14 @@ class RadioInterface:
         info_y = top + self.history_height + 3
         self.put(info_y, left + 3, clip("Songs from about the last hour, newest first", w - 6), "dialog")
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, " Search ", self.history_search)
-        self.button(buttons_y, left + w // 2 + 3, " Close  ", not self.history_search, cancel=True)
+        self.button(
+            buttons_y, left + w // 2 - 12, " Search ", self.history_search,
+            action=lambda: self.history_button(True),
+        )
+        self.button(
+            buttons_y, left + w // 2 + 3, " Close  ", not self.history_search, cancel=True,
+            action=lambda: self.history_button(False),
+        )
 
     def draw_search_dialog(self):
         w = 44
@@ -1662,10 +1976,13 @@ class RadioInterface:
         labels = [f" {name} " for name, _, _ in SEARCH_SITES]
         x = first_x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
         for i, label in enumerate(labels):
-            self.button(top + 5, x, label, i == self.search_choice)
+            self.button(top + 5, x, label, i == self.search_choice, action=lambda i=i: self.web_search(i))
             x += len(label) + 3
         # Cancel goes below the first site
-        self.button(top + 7, first_x, " Cancel ", self.search_choice == len(SEARCH_SITES), cancel=True)
+        self.button(
+            top + 7, first_x, " Cancel ", self.search_choice == len(SEARCH_SITES), cancel=True,
+            action=lambda: self.handle_key("KEY_ESCAPE"),
+        )
 
     def draw_help_dialog(self):
         w = 48
@@ -1693,7 +2010,7 @@ class RadioInterface:
             self.put(top + 2, left + w - 1, "▲", "dialog_border")
         if self.help_scroll + self.help_height < len(HELP):
             self.put(top + 1 + self.help_height, left + w - 1, "▼", "dialog_border")
-        self.button(top + h - 3, left + (w - 8) // 2, "   OK   ", True)
+        self.button(top + h - 3, left + (w - 8) // 2, "   OK   ", True, action=self.close_dialog)
 
     def draw_exit_dialog(self):
         w = 34
@@ -1705,8 +2022,8 @@ class RadioInterface:
         question = "Quit Nightride?"
         self.put(top + 2, left + (w - len(question)) // 2, question, "dialog")
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 11, "  Yes   ", self.exit_yes)
-        self.button(buttons_y, left + w // 2 + 2, "   No   ", not self.exit_yes, cancel=True)
+        self.button(buttons_y, left + w // 2 - 11, "  Yes   ", self.exit_yes, action=self.quit)
+        self.button(buttons_y, left + w // 2 + 2, "   No   ", not self.exit_yes, cancel=True, action=self.close_dialog)
 
     def draw_about_dialog(self):
         w = 44
@@ -1715,16 +2032,20 @@ class RadioInterface:
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "About")
 
-        def centered(y, text, style):
-            self.put(y, left + (w - len(text)) // 2, text, style)
+        def centered(y, text, style, action=None):
+            x = left + (w - len(text)) // 2
+            self.put(y, x, text, style)
+            if action:
+                self.zone(y, x, len(text), action)
 
         centered(top + 2, "NIGHTRIDE", "dialog_value")
         centered(top + 3, "Player for Nightride.fm", "dialog")
         centered(top + 4, f"Version {VERSION}", "dialog")
         centered(top + 6, "Matias Räisänen 2026", "dialog")
-        centered(top + 7, "matias@matiasraisanen.com", "dialog_value")
-        centered(top + 8, "github.com/matiasraisanen/nightride", "dialog_value")
-        self.button(top + 10, left + (w - 8) // 2, "   OK   ", True)
+        # The address is copied, as many people have no mail program set up for mailto: links
+        centered(top + 7, AUTHOR_EMAIL, "link", self.copy_email)
+        centered(top + 8, REPOSITORY, "link", self.open_repository)
+        self.button(top + 10, left + (w - 8) // 2, "   OK   ", True, action=self.close_dialog)
 
 
 def test_stream(station, sound=True):

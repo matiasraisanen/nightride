@@ -34,6 +34,8 @@ DEFAULTS = {
         # 0 to 99, or "last" for the volume used last
         "start_volume": "last",
         "last_volume": "40",
+        # Clicks and the scroll wheel. Off leaves the mouse to the terminal, for selecting text.
+        "mouse": "True",
         "clock": "True",
         "date": "True",
         # strftime formats, see https://strftime.org

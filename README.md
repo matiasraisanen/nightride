@@ -103,7 +103,7 @@ Press **F10** to open the menus. **Alt** and the red letter of a menu opens it d
 In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to close. Red letters in menu items are hotkeys.
 
 - *Radio*: Browse stations, Recently played, Web search, Mute, Exit
-- *Options*: VU meter, Clock, Date, and Settings for the startup station (the last played one by default), the startup volume (the last used one by default, or a set level), the clock and date formats and notifications
+- *Options*: VU meter, Clock, Date, Mouse, and Settings for the startup station (the last played one by default), the startup volume (the last used one by default, or a set level), the clock and date formats and notifications
 - *Theme*: the color scheme. Moving over a theme shows it right away, **ENTER** keeps it and **ESC** goes back to the one you had. **t** and **Shift-T** change to the next and previous theme.
   - *Synthwave*: purple and cyan on dark grey (the default)
   - *Outrun*: neon pink, orange and yellow on navy
@@ -134,6 +134,19 @@ Press **w** to search the web for the song: on Bandcamp, YouTube or Google. Choo
 A message above the status line says what a key did, and shows the new song when one starts. *Notifications* in *Settings* opens a picker where new songs and key actions can each be turned on or off with **SPACE**. Errors always show. The song and station are also in the terminal's window title.
 
 Press **Alt-X** or **F12** to quit, or **ESC** to get asked first.
+
+### Mouse
+
+The mouse works too:
+- Click a menu to open it and an item to choose it. A click outside closes the menu.
+- Click the key hints on the status line, like *F2 Browse*, to do the same as the key.
+- Click the buttons in the dialogs. In *Browse* and *Recently played*, a click picks a row and a double-click plays the station or searches for the song.
+- On the main screen, click the station to browse, and the artist or song to search the web. Click the volume bar to set the volume, the arrows next to it to step by 10, and the number to mute.
+- In *Settings*, click a value's arrows to change it.
+- The scroll wheel changes the volume by 1 on the main screen, and moves in lists and the help.
+- In *About*, click the email address to copy it, or the GitHub address to open it.
+
+While the player has the mouse, most terminals select text with **Shift** held down. *Mouse* in the *Options* menu turns the mouse off, to leave it all to the terminal. In cmd.exe, the player turns off QuickEdit while it runs, as that would select text on every click, and turns it back on when it exits.
 
 ## Notes
 
