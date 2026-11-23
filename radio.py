@@ -320,7 +320,7 @@ THEME_HOTKEYS = {"Darksynth": "k"}
 STATUS_HINTS = {
     "main": [
         ("F1", "Help"),
-        ("F2", "Browse"),
+        ("F2", "Stations"),
         ("F10", "Menu"),
         ("←→", "Station"),
         ("↑↓", "Volume"),
@@ -350,7 +350,7 @@ HELP = [
     ("↑↓", "Volume in steps of 10"),
     ("Shift-↑↓", "Volume in steps of 1"),
     ("M", "Mute"),
-    ("F2", "Browse stations"),
+    ("F2", "Stations"),
     ("F3", "Recently played"),
     ("W", "Web search for the song"),
     ("V", "VU meter on/off"),
@@ -372,7 +372,7 @@ HELP = [
     ("Wheel", "Volume, or scroll a list"),
     ("Click volume", "◄ ► step, bar sets level"),
     ("Click number", "Mute"),
-    ("Click station", "Browse stations"),
+    ("Click station", "Stations"),
     ("Click song", "Web search"),
 ]
 
@@ -718,8 +718,8 @@ class RadioInterface:
         self.message_until = 0.0
         # The station and song last seen, to notice when a new song starts
         self.seen_song = None
-        # Browse dialog: whether "Play" has focus (otherwise "Cancel")
-        self.browse_play = True
+        # Stations dialog: whether "Play" has focus (otherwise "Cancel")
+        self.stations_play = True
         self.list_height = 1
         self.menu_x = []
         # Scrolling texts: name => (text, when it started scrolling)
@@ -1007,9 +1007,9 @@ class RadioInterface:
         list_keys = ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END")
         if key in list_keys or key in DIGITS:
             # Picking a station puts the focus back on Play, so Enter never cancels by surprise
-            self.browse_play = True
+            self.stations_play = True
         if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
-            self.browse_play = not self.browse_play
+            self.stations_play = not self.stations_play
         elif key == "KEY_UP":
             self.dialog_sel = max(0, self.dialog_sel - 1)
         elif key == "KEY_DOWN":
@@ -1024,7 +1024,7 @@ class RadioInterface:
             self.dialog_sel = last
         elif key in DIGITS and 1 <= int(key) <= len(self.stations):
             self.dialog_sel = int(key) - 1
-        elif key in ENTER_KEYS and self.browse_play:
+        elif key in ENTER_KEYS and self.stations_play:
             self.logger.log.debug(f"User selected station {self.stations[self.dialog_sel]} via F2")
             self.set_station(self.stations[self.dialog_sel])
             self.mode = "main"
@@ -1168,7 +1168,7 @@ class RadioInterface:
             (
                 "~R~adio",
                 [
-                    ("~B~rowse stations...", "F2", self.open_station_dialog, False, False),
+                    ("~S~tations...", "F2", self.open_station_dialog, False, False),
                     ("~R~ecently played...", "F3", self.open_history, False, False),
                     ("~W~eb search...", "W", self.open_search, False, False),
                     None,
@@ -1249,12 +1249,12 @@ class RadioInterface:
 
     def click_station(self, index):
         self.dialog_sel = index
-        self.browse_play = True
+        self.stations_play = True
         if self.double_click:
             self.play_selected_station()
 
     def play_selected_station(self):
-        self.browse_play = True
+        self.stations_play = True
         self.station_dialog_key("\n")
 
     def click_setting(self, field, key=None):
@@ -1297,7 +1297,7 @@ class RadioInterface:
     def open_station_dialog(self):
         self.mode = "stations"
         self.dialog_sel = self.stations.index(self.station)
-        self.browse_play = True
+        self.stations_play = True
 
     def open_history(self):
         self.mode = "history"
@@ -1792,7 +1792,7 @@ class RadioInterface:
         h = self.list_height + 9
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
-        self.window(top, left, h, w, "dialog", "dialog_border", "Browse")
+        self.window(top, left, h, w, "dialog", "dialog_border", "Stations")
 
         # Keep the selection visible in the list
         if self.dialog_sel < self.dialog_scroll:
@@ -1827,13 +1827,13 @@ class RadioInterface:
         info = self.api.now_playing.get(self.stations[self.dialog_sel], {})
         info_y = top + self.list_height + 3
         self.put(info_y, left + 3, "Artist", "dialog")
-        self.put(info_y, left + 11, self.marquee("browse_artist", info.get("artist", ""), w - 14), "dialog_value")
+        self.put(info_y, left + 11, self.marquee("stations_artist", info.get("artist", ""), w - 14), "dialog_value")
         self.put(info_y + 1, left + 3, "Song", "dialog")
-        self.put(info_y + 1, left + 11, self.marquee("browse_song", info.get("song", ""), w - 14), "dialog_value")
+        self.put(info_y + 1, left + 11, self.marquee("stations_song", info.get("song", ""), w - 14), "dialog_value")
 
         buttons_y = top + h - 3
-        self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.browse_play, action=self.play_selected_station)
-        self.button(buttons_y, left + w // 2 + 3, " Cancel ", not self.browse_play, cancel=True, action=self.close_dialog)
+        self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.stations_play, action=self.play_selected_station)
+        self.button(buttons_y, left + w // 2 + 3, " Cancel ", not self.stations_play, cancel=True, action=self.close_dialog)
 
     def draw_settings_dialog(self):
         w = 44

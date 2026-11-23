@@ -76,7 +76,7 @@ Use the keys below, or the menus: press **F10**, or **Alt** and the red letter o
 | **↑** **↓** | Volume in steps of 10 |
 | **Shift**-**↑** **↓** | Volume in steps of 1 |
 | **M** | Mute |
-| **F2** | Browse the stations |
+| **F2** | Stations |
 | **F3** | Recently played songs |
 | **W** | Search the web for the song |
 | **V** | VU meter on or off |
@@ -91,7 +91,7 @@ In the menus and dialogs, the arrow keys and **Tab** move, **Enter** chooses and
 
 ### Menus
 
-- *Radio*: Browse stations, Recently played, Web search, Mute, Exit
+- *Radio*: Stations, Recently played, Web search, Mute, Exit
 - *Options*: VU meter, Clock, Date, Mouse, and *Settings*
 - *Theme*: the colour themes. The highlighted theme shows right away. **Enter** keeps it, and **Esc** goes back to the one you had.
   - *Synthwave*: purple and cyan on dark grey (the default)
@@ -107,8 +107,8 @@ In the menus and dialogs, the arrow keys and **Tab** move, **Enter** chooses and
 ### Mouse
 
 - Click the menus, the buttons and the key hints on the bottom line.
-- In *Browse* and *Recently played*, click to pick a row, and double-click to play the station or search for the song.
-- On the main screen, click the station to browse, and the artist or song to search the web. Click the volume bar to set the volume, the arrows next to it to step by 10, and the number to mute.
+- In *Stations* and *Recently played*, click to pick a row, and double-click to play the station or search for the song.
+- On the main screen, click the station to open *Stations*, and the artist or song to search the web. Click the volume bar to set the volume, the arrows next to it to step by 10, and the number to mute.
 - The scroll wheel changes the volume on the main screen, and scrolls the lists.
 
 While the player has the mouse, most terminals select text with **Shift** held down. *Options* → *Mouse* turns the mouse off.
