@@ -9,38 +9,48 @@ DEFAULTS = {
     "URLS": {
         "sse_url": "https://nightride.fm/meta",
         "audio_stream_base_url": "https://stream.nightride.fm",
+        # Opened from Help > Nightride.fm on web
+        "website": "https://nightride.fm",
         # Web search. {query} is replaced with the song's artist and title.
         "bandcamp_search": "https://bandcamp.com/search?q={query}",
         "youtube_search": "https://www.youtube.com/results?search_query={query}",
         "google_search": "https://www.google.com/search?q={query}",
     },
+    # The stations nightride.fm lists, in its order
     "STATIONS": {
         "1": "nightride",
         "2": "chillsynth",
-        "3": "darksynth",
-        "4": "horrorsynth",
-        "5": "spacesynth",
-        "6": "datawave",
+        "3": "datawave",
+        "4": "spacesynth",
+        "5": "darksynth",
+        "6": "horrorsynth",
         "7": "ebsm",
-        "8": "rektory",
-        "9": "rekt",
     },
     "SETTINGS": {
         "vu_meter": "False",
         # A station's name, or "last" for the one played last
         "default_station": "last",
         "last_station": "chillsynth",
-        "startup_volume": "4",
+        # 0 to 99, or "last" for the volume used last
+        "start_volume": "last",
+        "last_volume": "40",
         "clock": "True",
         "date": "True",
         # strftime formats, see https://strftime.org
         "clock_format": "%H:%M",
         "date_format": "%d.%m.%Y",
-        # Messages above the status line: all, songs (new songs only), actions (key presses only) or off
+        # Messages above the status line: all, off, or a list of songs (new songs) and actions (what a
+        # key did), such as "songs, actions". Errors always show.
         "notifications": "all",
         "theme": "Synthwave",
     },
 }
+
+# The station list that came with older versions. A settings file that still has it gets the new
+# one, while a list the user has changed is kept.
+OLD_DEFAULT_STATIONS = [
+    "nightride", "chillsynth", "darksynth", "horrorsynth", "spacesynth", "datawave", "ebsm", "rektory", "rekt"
+]
 
 _logger = None
 
@@ -67,6 +77,35 @@ def load():
     except configparser.Error as e:
         log().warning(f"Could not read {SETTINGS_FILE}, using default settings: {e}")
         config = configparser.ConfigParser(interpolation=None)
+
+    if config.has_section("STATIONS") and [v for _, v in config.items("STATIONS")] == OLD_DEFAULT_STATIONS:
+        log().info("Updating the station list to the one nightride.fm has now")
+        # Emptied rather than removed, so the section keeps its place in the file
+        for key in config.options("STATIONS"):
+            config.remove_option("STATIONS", key)
+
+    # The startup volume used to be 0 to 9, and was played at 11 times that. Now it is 0 to 99, and
+    # by default the last used one. The old one becomes the last used one, so the first start after
+    # the update sounds the same.
+    if config.has_option("SETTINGS", "startup_volume"):
+        if not config.has_option("SETTINGS", "last_volume"):
+            try:
+                old = min(9, max(0, config.getint("SETTINGS", "startup_volume")))
+                config.set("SETTINGS", "last_volume", str(old * 11))
+                log().info(f"Startup volume {old} is now the last used volume {old * 11}, on the new 0 to 99 scale")
+            except ValueError:
+                pass
+        config.remove_option("SETTINGS", "startup_volume")
+
+    # Before "last played" existed, chillsynth was the default and there was no last_station. Such a
+    # file gets the new default.
+    if (
+        config.has_section("SETTINGS")
+        and config.get("SETTINGS", "default_station", fallback=None) == "chillsynth"
+        and not config.has_option("SETTINGS", "last_station")
+    ):
+        log().info("Starting on the last played station, the new default")
+        config.set("SETTINGS", "default_station", "last")
 
     for section, values in DEFAULTS.items():
         if not config.has_section(section):

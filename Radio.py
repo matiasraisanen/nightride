@@ -333,6 +333,9 @@ STATUS_HINTS = {
     "help": [("↑↓", "Scroll"), ("Enter", "Close")],
     "exit": [("←→", "Move"), ("Enter", "Select"), ("Y", "Yes"), ("N", "No"), ("Esc", "Cancel")],
     "settings": [("↑↓", "Move"), ("←→", "Change"), ("Tab", "Next"), ("Enter", "OK"), ("Esc", "Cancel")],
+    # The same dialog, on a field that opens a picker
+    "settings_picker": [("↑↓", "Move"), ("Enter", "Choose"), ("Tab", "Next"), ("Esc", "Cancel")],
+    "notifications": [("↑↓", "Move"), ("Space", "Toggle"), ("Enter", "OK"), ("Esc", "Cancel")],
 }
 
 ENTER_KEYS = ("\n", "\r", "KEY_ENTER")
@@ -342,8 +345,9 @@ DIGITS = tuple("0123456789")
 # Contents of the help dialog: (keys, description) rows, a heading (keys only), or None for a blank line
 HELP = [
     ("Main screen", None),
-    ("←→  1-9", "Change station"),
-    ("↑↓", "Volume"),
+    ("←→  1-7", "Change station"),
+    ("↑↓", "Volume in steps of 10"),
+    ("Shift-↑↓", "Volume in steps of 1"),
     ("M", "Mute"),
     ("F2", "Browse stations"),
     ("F3", "Recently played"),
@@ -365,14 +369,13 @@ HELP = [
 # Focusable items in the settings dialog, top to bottom
 SETTINGS_START, SETTINGS_VOLUME, SETTINGS_CLOCK, SETTINGS_DATE, SETTINGS_NOTIFY, SETTINGS_OK, SETTINGS_CANCEL = range(7)
 
-# Which messages show above the status line: setting => (label in the settings, kinds shown).
-# Errors always show.
-NOTIFICATIONS = {
-    "all": ("All", {"song", "action"}),
-    "songs": ("New songs", {"song"}),
-    "actions": ("Key actions", {"action"}),
-    "off": ("Off", set()),
-}
+# Messages above the status line that can be turned off: (kind, label in the picker, name in
+# settings.ini). Errors always show.
+NOTIFICATION_KINDS = [
+    ("song", "New songs", "songs"),
+    ("action", "Key actions", "actions"),
+]
+ALL_NOTIFICATIONS = {kind for kind, _, _ in NOTIFICATION_KINDS}
 
 # Web search sites: (name, setting with its address, whether the station's name is added to the search).
 # Bandcamp and YouTube look for every word, so only Google gets the station.
@@ -422,6 +425,66 @@ def theme_label(name):
 
 def visible_len(text):
     return len(text.replace("~", ""))
+
+
+# Semantic versioning (semver.org). Keep in step with the version in pyproject.toml.
+VERSION = "2.0.0"
+
+MAX_VOLUME = 99
+
+
+def step_volume(volume, step):
+    # Volume after a step of 1 or 10 up or down. Steps of 10 go to the next round ten, so the
+    # volume lines up again after fine changes: 45 goes to 50 or 40. The top is 99, not 100.
+    if abs(step) == 1:
+        return min(MAX_VOLUME, max(0, volume + step))
+    if step > 0:
+        return min(MAX_VOLUME, (volume // 10 + 1) * 10)
+    return max(0, (volume - 1) // 10 * 10)
+
+
+def step_start_volume(volume, step):
+    # The startup volume in the settings: "last", then 0 to 99
+    if volume == "last":
+        return 0 if step > 0 else "last"
+    if volume == 0 and step < 0:
+        return "last"
+    return step_volume(volume, step)
+
+
+def volume_bar(volume, width=10):
+    # Each block is 10, and a block shows from 5 up, so 99 fills the bar. Any sound shows a block.
+    full = min(width, max(1 if volume else 0, (volume + 5) // 10))
+    return "█" * full, "░" * (width - full)
+
+
+def parse_notifications(value):
+    # The kinds the notifications setting turns on. It is "all", "off", or names separated by
+    # commas, such as "songs, actions". Anything else means all.
+    value = value.strip().lower()
+    if value in ("off", "none", ""):
+        return set()
+    names = {name.strip() for name in value.split(",")}
+    kinds = {kind for kind, _, name in NOTIFICATION_KINDS if name in names}
+    return kinds or set(ALL_NOTIFICATIONS)
+
+
+def format_notifications(kinds):
+    # The other way round, for settings.ini
+    if kinds >= ALL_NOTIFICATIONS:
+        return "all"
+    if not kinds:
+        return "off"
+    return ", ".join(name for kind, _, name in NOTIFICATION_KINDS if kind in kinds)
+
+
+def describe_notifications(kinds):
+    # Short text for the settings dialog
+    if kinds >= ALL_NOTIFICATIONS:
+        return "All"
+    if not kinds:
+        return "Off"
+    return ", ".join(label for kind, label, _ in NOTIFICATION_KINDS if kind in kinds)
 
 
 def open_url(url):
@@ -519,7 +582,12 @@ class RadioInterface:
             self.theme = "Synthwave"
         # The chosen theme. self.theme differs from it while the Theme menu previews another one.
         self.saved_theme = self.theme
-        self.volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
+        start = self.start_volume_setting()
+        if start == "last":
+            start = settings.get_int(self.config, "SETTINGS", "last_volume", 0, MAX_VOLUME)
+        self.volume = start
+        # When the volume last changed and isn't saved yet as the last used one, or None
+        self.volume_changed_at = None
         self.muted = False
         self.api.audioPlayer.set_volume(self.volume)
         self.station = self.config["SETTINGS"]["default_station"]
@@ -528,7 +596,6 @@ class RadioInterface:
         if self.station not in self.stations:
             self.logger.log.warning(f"Station {self.station!r} is not in the station list")
             self.station = self.stations[0]
-        self.version = "v2.0"
 
         # UI state. mode is one of the keys in STATUS_HINTS.
         self.mode = "main"
@@ -549,13 +616,16 @@ class RadioInterface:
         # Scrolling texts: name => (text, when it started scrolling)
         self.marquees = {}
         # Settings dialog: the focused field (see SETTINGS_* below), and the values being edited.
-        # Start is "last" or a station, the formats are strftime formats.
+        # Start is "last" or a station, the volume "last" or 0 to 99, the formats are strftime formats.
         self.settings_field = 0
         self.settings_start = "last"
         self.settings_volume = 0
         self.settings_clock = ""
         self.settings_date = ""
-        self.settings_notify = "all"
+        self.settings_notify = set(ALL_NOTIFICATIONS)
+        # Notifications picker: the focused row (the kinds, then OK and Cancel), and the kinds ticked
+        self.notify_field = 0
+        self.notify_kinds = set()
         # Recently played dialog: the chosen song (0 is the newest), the first one shown, how many
         # fit, and whether "Search" has focus (otherwise "Close")
         self.history_sel = 0
@@ -602,6 +672,7 @@ class RadioInterface:
             # Clear our title, then restore the saved one. Terminals that can't restore titles are
             # left with an empty one, which most show as their default.
             write_terminal(SET_TITLE.format(""), RESTORE_TITLE)
+            self.save_last_volume(now=True)
             self.logger.log.info("===== Player exited =====")
         self.api.audioPlayer.shutdown()
 
@@ -611,6 +682,7 @@ class RadioInterface:
         while self.running:
             self.read_keys()
             self.check_new_song()
+            self.save_last_volume()
             self.update_title()
             self.draw()
 
@@ -652,6 +724,8 @@ class RadioInterface:
             self.station_dialog_key(key)
         elif self.mode == "settings":
             self.settings_dialog_key(key)
+        elif self.mode == "notifications":
+            self.notifications_dialog_key(key)
         elif self.mode == "history":
             self.history_dialog_key(key)
         elif self.mode == "search":
@@ -687,9 +761,13 @@ class RadioInterface:
         elif key == "KEY_RIGHT":
             self.step_station(1)
         elif key in ("KEY_UP", "+", "="):
-            self.volume_up()
+            self.change_volume(10)
         elif key in ("KEY_DOWN", "-"):
-            self.volume_down()
+            self.change_volume(-10)
+        elif key == "KEY_SHIFT_UP":
+            self.change_volume(1)
+        elif key == "KEY_SHIFT_DOWN":
+            self.change_volume(-1)
         elif key == "v":
             self.toggle_vu_meter()
         elif key == "m":
@@ -784,26 +862,28 @@ class RadioInterface:
         elif key in ("KEY_TAB", "KEY_BTAB"):
             step = 1 if key == "KEY_TAB" else -1
             self.settings_field = (field + step) % (SETTINGS_CANCEL + 1)
+        elif key in ("KEY_SHIFT_LEFT", "KEY_SHIFT_RIGHT") and field == SETTINGS_VOLUME:
+            self.settings_volume = step_start_volume(self.settings_volume, -1 if key == "KEY_SHIFT_LEFT" else 1)
         elif key in ("KEY_LEFT", "KEY_RIGHT"):
             step = -1 if key == "KEY_LEFT" else 1
             if field == SETTINGS_START:
                 self.settings_start = cycle(["last"] + self.stations, self.settings_start, step)
             elif field == SETTINGS_VOLUME:
-                self.settings_volume = min(9, max(0, self.settings_volume + step))
+                self.settings_volume = step_start_volume(self.settings_volume, step * 10)
             elif field == SETTINGS_CLOCK:
                 self.settings_clock = cycle(CLOCK_FORMATS, self.settings_clock, step)
             elif field == SETTINGS_DATE:
                 self.settings_date = cycle(DATE_FORMATS, self.settings_date, step)
-            elif field == SETTINGS_NOTIFY:
-                self.settings_notify = cycle(list(NOTIFICATIONS), self.settings_notify, step)
-            else:
+            elif field in (SETTINGS_OK, SETTINGS_CANCEL):
                 self.settings_field = SETTINGS_CANCEL if field == SETTINGS_OK else SETTINGS_OK
+        elif key in ENTER_KEYS + (" ",) and field == SETTINGS_NOTIFY:
+            self.open_notifications()
         elif key in ENTER_KEYS and field != SETTINGS_CANCEL:
             self.config.set("SETTINGS", "default_station", self.settings_start)
-            self.config.set("SETTINGS", "startup_volume", str(self.settings_volume))
+            self.config.set("SETTINGS", "start_volume", str(self.settings_volume))
             self.config.set("SETTINGS", "clock_format", self.settings_clock)
             self.config.set("SETTINGS", "date_format", self.settings_date)
-            self.config.set("SETTINGS", "notifications", self.settings_notify)
+            self.config.set("SETTINGS", "notifications", format_notifications(self.settings_notify))
             self.save_config()
             self.notify("Settings saved")
             self.mode = "main"
@@ -869,6 +949,27 @@ class RadioInterface:
         elif key in ENTER_KEYS + ("KEY_ESCAPE", " ", "KEY_F1"):
             self.mode = "main"
 
+    def notifications_dialog_key(self, key):
+        # A tick box for each kind, then OK and Cancel on one row
+        boxes = len(NOTIFICATION_KINDS)
+        ok, cancel = boxes, boxes + 1
+        field = self.notify_field
+        if key == "KEY_DOWN":
+            self.notify_field = min(ok, field + 1) if field < ok else field
+        elif key == "KEY_UP":
+            self.notify_field = boxes - 1 if field >= ok else max(0, field - 1)
+        elif key in ("KEY_TAB", "KEY_BTAB"):
+            self.notify_field = (field + (1 if key == "KEY_TAB" else -1)) % (cancel + 1)
+        elif key in ("KEY_LEFT", "KEY_RIGHT") and field >= ok:
+            self.notify_field = cancel if field == ok else ok
+        elif key == " " and field < ok:
+            self.notify_kinds ^= {NOTIFICATION_KINDS[field][0]}
+        elif key in ENTER_KEYS and field != cancel:
+            self.settings_notify = set(self.notify_kinds)
+            self.mode = "settings"
+        elif key in ENTER_KEYS + ("KEY_ESCAPE",):
+            self.mode = "settings"
+
     def exit_dialog_key(self, key):
         if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
             self.exit_yes = not self.exit_yes
@@ -919,6 +1020,8 @@ class RadioInterface:
                 "~H~elp",
                 [
                     ("~K~eys...", "F1", self.open_help, False, False),
+                    ("~N~ightride.fm on web", None, self.open_website, False, False),
+                    None,
                     ("~A~bout...", None, self.open_about, False, False),
                 ],
             ),
@@ -946,6 +1049,17 @@ class RadioInterface:
 
     def open_about(self):
         self.mode = "about"
+
+    def open_website(self):
+        url = self.config["URLS"]["website"]
+        self.mode = "main"
+        self.logger.log.debug(f"Opening {url}")
+        try:
+            open_url(url)
+            self.notify("Opened nightride.fm in the browser")
+        except OSError as e:
+            self.logger.log.error(f"Could not open {url}: {e}")
+            self.notify("Could not open the browser", kind="error")
 
     def open_help(self):
         self.mode = "help"
@@ -998,11 +1112,16 @@ class RadioInterface:
         self.settings_field = 0
         start = self.config["SETTINGS"]["default_station"]
         self.settings_start = start if start in self.stations else "last"
-        self.settings_volume = settings.get_int(self.config, "SETTINGS", "startup_volume", 0, 9)
+        self.settings_volume = self.start_volume_setting()
         self.settings_clock = self.config["SETTINGS"]["clock_format"]
         self.settings_date = self.config["SETTINGS"]["date_format"]
-        notify = self.config["SETTINGS"]["notifications"]
-        self.settings_notify = notify if notify in NOTIFICATIONS else "all"
+        self.settings_notify = parse_notifications(self.config["SETTINGS"]["notifications"])
+
+    def open_notifications(self):
+        # A picker on top of the settings dialog. Its choice is saved with the settings.
+        self.mode = "notifications"
+        self.notify_field = 0
+        self.notify_kinds = set(self.settings_notify)
 
     def quit(self):
         self.running = False
@@ -1027,15 +1146,33 @@ class RadioInterface:
     def apply_volume(self):
         self.api.audioPlayer.set_volume(0 if self.muted else self.volume)
 
-    def volume_up(self):
-        self.volume = min(9, self.volume + 1)
+    def change_volume(self, step):
+        # step is 1 or 10, up or down: see step_volume
+        self.volume = step_volume(self.volume, step)
         self.muted = False
         self.apply_volume()
+        self.volume_changed_at = time.time()
 
-    def volume_down(self):
-        self.volume = max(0, self.volume - 1)
-        self.muted = False
-        self.apply_volume()
+    def start_volume_setting(self):
+        # The startup volume setting: "last", or 0 to 99. Anything else means "last".
+        value = self.config["SETTINGS"]["start_volume"].strip().lower()
+        if value in DIGITS or (len(value) == 2 and all(c in DIGITS for c in value)):
+            return int(value)
+        if value != "last":
+            self.logger.log.warning(f"Setting start_volume = {value!r} is not last or 0 to 99, using last")
+        return "last"
+
+    def save_last_volume(self, now=False):
+        # Saves the volume as the last used one, once it has stayed the same for a second, so
+        # holding a key down doesn't write the settings file on every step
+        if self.volume_changed_at is None:
+            return
+        if not now and time.time() - self.volume_changed_at < 1.0:
+            return
+        self.volume_changed_at = None
+        if self.config["SETTINGS"]["last_volume"] != str(self.volume):
+            self.config.set("SETTINGS", "last_volume", str(self.volume))
+            self.save_config()
 
     def toggle_mute(self):
         self.muted = not self.muted
@@ -1076,13 +1213,14 @@ class RadioInterface:
         # Called from another thread when the console window is closed. Windows ends the process
         # right after, so only log it and stop the stream.
         self.logger.log.info("===== Player exited (window closed) =====")
+        self.save_last_volume(now=True)
         self.api.audioPlayer.shutdown(timeout=1.0)
 
     def update_title(self):
         # The song and station in the terminal's window or tab title, for when the player is in the background
         info = self.api.now_playing.get(self.station, {})
         song = " – ".join(part for part in (info.get("artist"), info.get("song")) if part)
-        title = f"{song} · {self.station}" if song else f"{self.station} · Nightride FM"
+        title = f"{song} · {self.station}" if song else f"{self.station} · Nightride.fm"
         # Control characters in a song name could end the title early
         title = "".join(c for c in title if c.isprintable())
         if title != self.title:
@@ -1092,8 +1230,7 @@ class RadioInterface:
     def notify(self, message, seconds=STATUS_MESSAGE_SECONDS, kind="action"):
         # Shows message above the status line for a moment, if the settings allow its kind:
         # "action" for what a key did, "song" for a new song, "error" always shows
-        setting = NOTIFICATIONS.get(self.config["SETTINGS"]["notifications"], NOTIFICATIONS["all"])
-        if kind != "error" and kind not in setting[1]:
+        if kind != "error" and kind not in parse_notifications(self.config["SETTINGS"]["notifications"]):
             return
         self.message = message
         self.message_until = time.time() + seconds
@@ -1202,6 +1339,9 @@ class RadioInterface:
             self.draw_about_dialog()
         elif self.mode == "settings":
             self.draw_settings_dialog()
+        elif self.mode == "notifications":
+            self.draw_settings_dialog()
+            self.draw_notifications_dialog()
         elif self.mode == "history":
             self.draw_history_dialog()
         elif self.mode == "search":
@@ -1238,7 +1378,10 @@ class RadioInterface:
         y = self.rows - 1
         self.fill(y, 0, 1, self.cols, "menu")
         x = 1
-        for key, label in STATUS_HINTS[self.mode]:
+        hints = self.mode
+        if self.mode == "settings" and self.settings_field == SETTINGS_NOTIFY:
+            hints = "settings_picker"
+        for key, label in STATUS_HINTS[hints]:
             width = len(key) + 1 + len(label)
             if x + width >= self.cols:
                 break
@@ -1304,13 +1447,14 @@ class RadioInterface:
 
         self.put(top + 8, label_x, "Volume", "label")
         self.put(top + 8, value_x, "◄", "label")
-        self.put(top + 8, value_x + 1, "█" * self.volume, "bar_full")
-        self.put(top + 8, value_x + 1 + self.volume, "░" * (9 - self.volume), "bar_empty")
-        self.put(top + 8, value_x + 10, "►", "label")
+        full, empty = volume_bar(self.volume)
+        self.put(top + 8, value_x + 1, full, "bar_full")
+        self.put(top + 8, value_x + 1 + len(full), empty, "bar_empty")
+        self.put(top + 8, value_x + 11, "►", "label")
         if self.muted or self.volume == 0:
-            self.put(top + 8, value_x + 12, " MUTED ", "error")
+            self.put(top + 8, value_x + 13, " MUTED ", "error")
         else:
-            self.put(top + 8, value_x + 12, str(self.volume), "number")
+            self.put(top + 8, value_x + 13, f"{self.volume:>2}", "number")
 
         if self.VU_METER:
             # The channel letters line up with the labels above
@@ -1419,14 +1563,19 @@ class RadioInterface:
         self.window(top, left, h, w, "dialog", "dialog_border", "Settings")
 
         volume = self.settings_volume
+        if volume == "last":
+            volume_text = f"{'Last used':<13}"
+        else:
+            volume_text = "".join(volume_bar(volume)) + f" {volume:>2}"
         start = "Last played" if self.settings_start == "last" else self.settings_start
         # The formats are shown as the time now looks in them
         fields = [
-            ("Start on", f"◄ {clip(start, 11):<11} ►"),
-            ("Startup volume", f"◄ {'█' * volume}{'░' * (9 - volume)} {volume} ►"),
-            ("Clock", f"◄ {clip(format_time(self.settings_clock), 11):<11} ►"),
-            ("Date", f"◄ {clip(format_time(self.settings_date), 11):<11} ►"),
-            ("Notifications", f"◄ {NOTIFICATIONS[self.settings_notify][0]:<11} ►"),
+            ("Startup station", f"◄ {clip(start, 13):<13} ►"),
+            ("Startup volume", f"◄ {volume_text} ►"),
+            ("Clock format", f"◄ {clip(format_time(self.settings_clock), 13):<13} ►"),
+            ("Date format", f"◄ {clip(format_time(self.settings_date), 13):<13} ►"),
+            # Opens a picker, so it has a drop-down mark instead of arrows
+            ("Notifications", f"{clip(describe_notifications(self.settings_notify), 15):<15} ▼"),
         ]
         for i, (label, value) in enumerate(fields):
             y = top + 2 + i * 2
@@ -1436,6 +1585,24 @@ class RadioInterface:
         buttons_y = top + h - 3
         self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.settings_field == SETTINGS_OK)
         self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.settings_field == SETTINGS_CANCEL, cancel=True)
+
+    def draw_notifications_dialog(self):
+        w = 32
+        boxes = len(NOTIFICATION_KINDS)
+        h = boxes + 8
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Notifications")
+
+        for i, (kind, label, _) in enumerate(NOTIFICATION_KINDS):
+            mark = "√" if kind in self.notify_kinds else " "
+            text = f" [{mark}] {label:<{w - 12}}"
+            self.put(top + 2 + i, left + 3, text, "list_sel" if i == self.notify_field else "list")
+        self.put(top + 3 + boxes, left + 3, "Errors always show.", "dialog")
+
+        buttons_y = top + h - 3
+        self.button(buttons_y, left + w // 2 - 12, "   OK   ", self.notify_field == boxes)
+        self.button(buttons_y, left + w // 2 + 3, " Cancel ", self.notify_field == boxes + 1, cancel=True)
 
     def draw_history_dialog(self):
         songs = self.history_songs()
@@ -1535,7 +1702,7 @@ class RadioInterface:
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Exit")
 
-        question = "Quit Nightride FM?"
+        question = "Quit Nightride?"
         self.put(top + 2, left + (w - len(question)) // 2, question, "dialog")
         buttons_y = top + h - 3
         self.button(buttons_y, left + w // 2 - 11, "  Yes   ", self.exit_yes)
@@ -1551,13 +1718,13 @@ class RadioInterface:
         def centered(y, text, style):
             self.put(y, left + (w - len(text)) // 2, text, style)
 
-        centered(top + 2, "NIGHTRIDE.FM", "dialog_value")
+        centered(top + 2, "NIGHTRIDE", "dialog_value")
         centered(top + 3, "Player for Nightride.fm", "dialog")
-        centered(top + 4, f"Version {self.version}", "dialog")
+        centered(top + 4, f"Version {VERSION}", "dialog")
         centered(top + 6, "Matias Räisänen 2026", "dialog")
         centered(top + 7, "matias@matiasraisanen.com", "dialog_value")
         centered(top + 8, "github.com/matiasraisanen/nightride", "dialog_value")
-        self.button(top + 10, left + (w - 8) // 2, "   OK   ")
+        self.button(top + 10, left + (w - 8) // 2, "   OK   ", True)
 
 
 def test_stream(station, sound=True):
@@ -1590,6 +1757,7 @@ def main():
         const="chillsynth",
         help="play a station for a few seconds without the interface, to check that audio works",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--debug", action="store_true", help="log every key press and more, for finding bugs")
     # With --test-stream: decode the stream but don't play it, for testing on machines without sound
     parser.add_argument("--no-sound", action="store_true", help=argparse.SUPPRESS)

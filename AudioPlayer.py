@@ -192,11 +192,9 @@ class AudioPlayer:
         self.stopped.set()
 
     def _set_volume(self, volume):
-        # Volume must be times eleven, so we can reach close to 100% max volume :-D
-        # Hey at least it's linear!
-        volume_percent = volume * 11
-        self.logger.log.debug(f"Set volume to {volume_percent}%")
-        self.player.audio_set_volume(volume_percent)
+        # volume is VLC's percentage, 0 to 99 here
+        self.logger.log.debug(f"Set volume to {volume}%")
+        self.player.audio_set_volume(volume)
 
     def check_reconnect(self):
         if not self.dropped or self.station is None:

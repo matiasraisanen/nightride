@@ -103,7 +103,7 @@ Press **F10** to open the menus. **Alt** and the red letter of a menu opens it d
 In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to close. Red letters in menu items are hotkeys.
 
 - *Radio*: Browse stations, Recently played, Web search, Mute, Exit
-- *Options*: VU meter, Clock, Date, and Settings for the station to start on, the startup volume, the clock and date formats and notifications
+- *Options*: VU meter, Clock, Date, and Settings for the startup station (the last played one by default), the startup volume (the last used one by default, or a set level), the clock and date formats and notifications
 - *Theme*: the color scheme. Moving over a theme shows it right away, **ENTER** keeps it and **ESC** goes back to the one you had. **t** and **Shift-T** change to the next and previous theme.
   - *Synthwave*: purple and cyan on dark grey (the default)
   - *Outrun*: neon pink, orange and yellow on navy
@@ -111,17 +111,17 @@ In the menus, use the arrow keys to move, **ENTER** to choose and **ESC** to clo
   - *DOS*: the classic blue MS-DOS look
   - *C64*: light blue on dark blue, like a Commodore 64
   - *Amber CRT* and *Green CRT*: single-colour monitors
-- *Help*: the keys, and About
+- *Help*: the keys, the nightride.fm website, and About
 
 Press **F1** for help, which lists all the keys.
 
 Press **F2** to browse the stations.  
 Use arrow keys **UP** and **DOWN** to choose station, and press **ENTER** to play it.  
 Arrow keys **LEFT** and **RIGHT** switch between the *Play* and *Cancel* buttons, and **ESC** cancels.  
-Stations can also be changed using numbers **1** through **9** on the main screen,  
+Stations can also be changed using numbers **1** through **7** on the main screen,  
 or with arrow keys **LEFT** and **RIGHT** to go to the previous or next station.
 
-Press arrow keys **UP** and **DOWN** to change volume, and **m** to mute.
+Press arrow keys **UP** and **DOWN** to change the volume in steps of 10, and with **SHIFT** held in steps of 1. The volume goes from 0 to 99. Press **m** to mute.
 
 Press **v** to enable/disable the VU meter. It shows the average level of the music for the left and right channels. A single lit segment marks the highest point the bar reached recently.
 
@@ -131,7 +131,7 @@ Press **F3** for the songs played recently on the current station. They are kept
 
 Press **w** to search the web for the song: on Bandcamp, YouTube or Google. Choose with the arrow keys or **b**, **y** and **g**. In *Recently played*, **ENTER** searches for the chosen song. The search addresses can be changed in `settings.ini`.
 
-A message above the status line says what a key did, and shows the new song when one starts. *Notifications* in *Settings* shows all of them, only new songs, only key actions, or none. The song and station are also in the terminal's window title.
+A message above the status line says what a key did, and shows the new song when one starts. *Notifications* in *Settings* opens a picker where new songs and key actions can each be turned on or off with **SPACE**. Errors always show. The song and station are also in the terminal's window title.
 
 Press **Alt-X** or **F12** to quit, or **ESC** to get asked first.
 
