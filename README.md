@@ -100,9 +100,9 @@ In the menus and dialogs, the arrow keys and **Tab** move, **Enter** chooses and
   - *DOS*: the classic blue MS-DOS look
   - *C64*: light blue on dark blue, like a Commodore 64
   - *Amber CRT* and *Green CRT*: single-colour monitors
-- *Help*: Keys, the Nightride.fm website, and About
+- *Help*: Keys, [Stream info](#stream-info), the Nightride.fm website, and About
 
-*Settings* has the station and volume to start with (by default the ones you used last), the clock and date formats, and which messages to show.
+*Settings* has the station and volume to start with (by default the ones you used last), the clock and date formats, syncing the song info with the audio, and which messages to show.
 
 ### Mouse
 
@@ -115,9 +115,33 @@ While the player has the mouse, most terminals select text with **Shift** held d
 
 ### Messages
 
-A message above the bottom line says what a key did, and shows each new song. *Settings* → *Notifications* chooses which ones show. Errors always show.
+A message above the bottom line says what a key did, shows each new song, and tells when something goes wrong. *Settings* → *Notifications* chooses which ones show.
 
 The song and the station are also in the terminal's window title. Some terminals, like Konsole, only show titles set by programs if their tab title format includes `%w`.
+
+### Song info and the audio sync
+
+Nightride FM's song info comes about 16 seconds before you hear the song, so the player measures the delay and shows each song when it starts in the audio. The delay is how far the player is behind the live stream, which VLC reports, plus how long after the song info the song starts in the stream, which the player checks twice an hour from the song titles in the stream (about 0.7 MB each time). If it can't measure them, it shows the song info as it comes, says *Song info is not in sync with the audio*, and the log tells why.
+
+*Settings* → *Sync song info* turns syncing off.
+
+### Stream info
+
+*Help* → *Stream info* shows how the stream is doing. It updates while it is open.
+
+| Row | What it shows |
+|---|---|
+| Station | The station playing |
+| Address | Where the audio comes from |
+| Status | *Playing for* how long, or *Connecting*, *Reconnecting*, *Stream error* (it keeps trying), *No audio output* or *Stopped* |
+| Format | What the stream server says it sends: the audio format, bitrate, sample rate, and mono or stereo. It is checked each time the dialog opens. |
+| Received | The data received since the station started playing, and the bitrate VLC measures. The bitrate shows after a few seconds. |
+| Dropouts | Trouble VLC has counted: *lost* is audio that came too late to play, heard as a skip, *broken* is data that couldn't be read, and *gaps* are breaks in the stream. *None* is how it should be. |
+| Reconnects | How many times the stream has dropped and the player connected again, since the station was chosen |
+| Behind live | How far the audio you hear is behind the live stream. The server starts each listener with some seconds of past audio. |
+| Song info feed | Whether the player is connected to Nightride FM's song info, which says what each station is playing. It is a separate connection from the audio, so the music can play while it is down. |
+| Song info gap | How long after the song info a song starts in the live stream, and when that was measured. *From before* means the value is from an earlier run, and hasn't been measured again yet. |
+| Sync | How long after the song info each song shows on the screen: *Behind live* plus *Song info gap*. See [Song info and the audio sync](#song-info-and-the-audio-sync). |
 
 ## Settings and files
 
@@ -133,8 +157,10 @@ The settings start as a copy of [settings.ini](./settings.ini). Most of them can
 |---|---|
 | `default_station` | Station to start on, or `last` for the one played last |
 | `start_volume` | Volume to start with, 0 to 99, or `last` for the one used last |
-| `clock_format`, `date_format` | [strftime formats](https://strftime.org) for the clock and date |
-| `notifications` | `all`, `off`, or `songs`, `actions`, or both separated by a comma |
+| `clock_format`, `date_format` | The clock and date formats in use, as [strftime formats](https://strftime.org) |
+| `clock_formats`, `date_formats` | The formats *Settings* cycles through. Add and remove them freely, one per line, indented. A format that doesn't work is left out, with a message, and the log says why. |
+| `notifications` | `all`, `off`, or any of `songs`, `actions` and `errors`, separated by commas |
+| `sync_song_info` | `True` to show each song when it starts in the audio, `False` when the song info says |
 | `theme` | One of the theme names |
 | `vu_meter`, `clock`, `date`, `mouse` | `True` or `False` |
 | `[STATIONS]` | The stations and their number keys |

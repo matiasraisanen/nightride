@@ -1,6 +1,8 @@
 import configparser
 import os
+import re
 import shutil
+import time
 from logger import Logger
 from paths import DEFAULT_SETTINGS_FILE, LOG_FILE, SETTINGS_FILE
 
@@ -38,12 +40,22 @@ DEFAULTS = {
         "mouse": "True",
         "clock": "True",
         "date": "True",
-        # strftime formats, see https://strftime.org
+        # The clock and date formats in use, and the ones Settings cycles through: strftime formats,
+        # see https://strftime.org. The lists are one format per line, indented.
         "clock_format": "%H:%M",
+        "clock_formats": "\n%H:%M\n%H:%M:%S\n%I:%M %p",
         "date_format": "%d.%m.%Y",
-        # Messages above the status line: all, off, or a list of songs (new songs) and actions (what a
-        # key did), such as "songs, actions". Errors always show.
+        "date_formats": "\n%d.%m.%Y\n%a %d.%m.\n%Y-%m-%d\n%a %d %b",
+        # Messages above the status line: all, off, or a list of songs (new songs), actions (what a
+        # key did) and errors, such as "songs, errors"
         "notifications": "all",
+        # Show a song when it starts in the audio, not when the song info says it started, which is
+        # some seconds earlier
+        "sync_song_info": "True",
+        # Measured by the player: seconds from a song's start in the song info to its start in the
+        # audio stream, and how far the audio heard is behind the live stream
+        "sync_gap": "",
+        "sync_lag": "",
         "theme": "Synthwave",
     },
 }
@@ -109,6 +121,23 @@ def load():
         log().info("Starting on the last played station, the new default")
         config.set("SETTINGS", "default_station", "last")
 
+    # Before the format lists, Settings had fixed formats, and a format written by hand was lost
+    # when another one was chosen. Such a format goes first in the new list.
+    for kind in ("clock", "date"):
+        current = config.get("SETTINGS", f"{kind}_format", fallback=None)
+        defaults = parse_list(DEFAULTS["SETTINGS"][f"{kind}_formats"])
+        if current and not config.has_option("SETTINGS", f"{kind}_formats") and current not in defaults:
+            log().info(f"Adding the {kind} format {current!r} to the list of {kind} formats")
+            config.set("SETTINGS", f"{kind}_formats", "\n".join([""] + [current] + defaults))
+
+    # Errors used to always show, so a file from before they could be turned off gets them on
+    if config.has_option("SETTINGS", "notifications") and not config.has_option("SETTINGS", "sync_song_info"):
+        value = config.get("SETTINGS", "notifications").strip()
+        if value.lower() in ("off", "none", ""):
+            config.set("SETTINGS", "notifications", "errors")
+        elif value.lower() != "all" and "errors" not in value.lower():
+            config.set("SETTINGS", "notifications", f"{value}, errors")
+
     for section, values in DEFAULTS.items():
         if not config.has_section(section):
             config.add_section(section)
@@ -139,6 +168,52 @@ def get_int(config, section, key, low, high):
         log().warning(f"Setting {key} = {config.get(section, key)!r} is not a number, using the default")
         value = int(DEFAULTS[section][key])
     return min(high, max(low, value))
+
+
+def parse_list(value):
+    # A setting with one value per line
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def get_list(config, section, key):
+    return parse_list(config.get(section, key))
+
+
+# Clock and date texts longer than this don't fit next to the menus
+MAX_FORMAT_LENGTH = 30
+
+
+def format_problem(fmt):
+    # What is wrong with a strftime format for the clock or date, or None if nothing. Python passes
+    # the format to the system: on Linux an unknown code shows as it is, on Windows it fails.
+    if not fmt:
+        return "is empty"
+    if not fmt.isprintable():
+        return "has control characters"
+    i = 0
+    while True:
+        i = fmt.find("%", i)
+        if i < 0:
+            break
+        # A code is %, then flags and a width that some systems allow (like %-d), then a letter
+        match = re.match(r"%[-_0^#]*\d*[EO]?(.)", fmt[i:])
+        if not match:
+            return "ends with a lone %"
+        code = match.group(0)
+        if code != "%%":
+            try:
+                if time.strftime(code) == code:
+                    return f"has an unknown code {code}"
+            except ValueError:
+                return f"has a code {code} that this system doesn't know"
+        i += len(code)
+    try:
+        text = time.strftime(fmt)
+    except ValueError as e:
+        return f"is not valid: {e}"
+    if len(text) > MAX_FORMAT_LENGTH:
+        return f"is too long, over {MAX_FORMAT_LENGTH} characters"
+    return None
 
 
 def get_bool(config, section, key):

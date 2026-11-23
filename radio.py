@@ -110,6 +110,8 @@ DOS_THEME = {
     "list": ("black", "cyan"),
     "list_sel": ("white", "blue"),
     "button": ("black", "green"),
+    # Scroll bars: arrows and the thumb
+    "scrollbar": ("white", "blue"),
     "button_focus": ("white", "green"),
     "button_cancel": ("lightgray", "red"),
     "button_cancel_focus": ("white", "red"),
@@ -147,6 +149,7 @@ SYNTHWAVE_THEME = {
     "list": ("black", "cyan"),
     "list_sel": ("white", "magenta"),
     "button": ("black", "cyan"),
+    "scrollbar": ("black", "cyan"),
     "button_focus": ("black", "lightcyan"),
     "button_cancel": ("white", "magenta"),
     "button_cancel_focus": ("black", "lightmagenta"),
@@ -182,6 +185,7 @@ OUTRUN_THEME = {
     "list": ("black", "orange"),
     "list_sel": ("white", "hotpink"),
     "button": ("black", "orange"),
+    "scrollbar": ("black", "orange"),
     "button_focus": ("black", "yellow"),
     "button_cancel": ("white", "hotpink"),
     "button_cancel_focus": ("black", "lightpink"),
@@ -219,6 +223,7 @@ DARKSYNTH_THEME = {
     "list": ("pale", "slate"),
     "list_sel": ("white", "darkred"),
     "button": ("white", "darkred"),
+    "scrollbar": ("white", "darkred"),
     "button_focus": ("white", "blood"),
     "button_cancel": ("pale", "slate"),
     "button_cancel_focus": ("black", "lightgray"),
@@ -254,6 +259,7 @@ C64_THEME = {
     "list": ("c64light", "c64dark"),
     "list_sel": ("c64dark", "white"),
     "button": ("c64light", "c64dark"),
+    "scrollbar": ("c64light", "c64dark"),
     "button_focus": ("white", "c64dark"),
     "button_cancel": ("white", "red"),
     "button_cancel_focus": ("yellow", "red"),
@@ -294,6 +300,7 @@ def crt_theme(brightest, bright, dim, dark):
         "list": ("nearblack", dim),
         "list_sel": ("nearblack", brightest),
         "button": ("nearblack", bright),
+        "scrollbar": ("nearblack", bright),
         "button_focus": ("nearblack", brightest),
         "button_cancel": (bright, "nearblack"),
         "button_cancel_focus": (brightest, "nearblack"),
@@ -331,6 +338,7 @@ STATUS_HINTS = {
     "history": [("↑↓", "Song"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Close")],
     "search": [("←→↑↓", "Move"), ("B Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
     "about": [("Enter", "Close")],
+    "stream_info": [("↑↓", "Scroll"), ("Enter", "Close")],
     "help": [("↑↓", "Scroll"), ("Enter", "Close")],
     "exit": [("←→", "Move"), ("Enter", "Select"), ("Y", "Yes"), ("N", "No"), ("Esc", "Cancel")],
     "settings": [("↑↓", "Move"), ("←→", "Change"), ("Tab", "Next"), ("Enter", "OK"), ("Esc", "Cancel")],
@@ -399,13 +407,17 @@ AUTHOR_EMAIL = "matias@matiasraisanen.com"
 REPOSITORY = "github.com/matiasraisanen/nightride"
 
 # Focusable items in the settings dialog, top to bottom
-SETTINGS_START, SETTINGS_VOLUME, SETTINGS_CLOCK, SETTINGS_DATE, SETTINGS_NOTIFY, SETTINGS_OK, SETTINGS_CANCEL = range(7)
+(
+    SETTINGS_START, SETTINGS_VOLUME, SETTINGS_CLOCK, SETTINGS_DATE, SETTINGS_SYNC, SETTINGS_NOTIFY,
+    SETTINGS_OK, SETTINGS_CANCEL,
+) = range(8)
 
 # Messages above the status line that can be turned off: (kind, label in the picker, name in
-# settings.ini). Errors always show.
+# settings.ini)
 NOTIFICATION_KINDS = [
     ("song", "New songs", "songs"),
     ("action", "Key actions", "actions"),
+    ("error", "Errors", "errors"),
 ]
 ALL_NOTIFICATIONS = {kind for kind, _, _ in NOTIFICATION_KINDS}
 
@@ -421,9 +433,6 @@ SEARCH_SITES = [
 SEARCH_DEFAULT = 0
 
 # Formats to choose from in the settings. settings.ini can have any other strftime format.
-CLOCK_FORMATS = ["%H:%M", "%H:%M:%S", "%I:%M %p"]
-DATE_FORMATS = ["%d.%m.%Y", "%a %d.%m.", "%Y-%m-%d", "%a %d %b"]
-
 MIN_COLS = 50
 
 # The screen is redrawn this often
@@ -512,12 +521,8 @@ def format_notifications(kinds):
 
 
 def describe_notifications(kinds):
-    # Short text for the settings dialog
-    if kinds >= ALL_NOTIFICATIONS:
-        return "All"
-    if not kinds:
-        return "Off"
-    return ", ".join(label for kind, label, _ in NOTIFICATION_KINDS if kind in kinds)
+    # Short text for the button in the settings dialog: how many kinds are on
+    return f"{len(kinds & ALL_NOTIFICATIONS)} of {len(ALL_NOTIFICATIONS)}..."
 
 
 def open_url(url):
@@ -638,7 +643,7 @@ def write_terminal(*sequences):
 
 def cycle(choices, current, step):
     # The choice step places from current. A current value that isn't among the choices (a format
-    # written into settings.ini by hand) comes first, so it can be got back to.
+    # removed from the list in settings.ini) comes first, so it can be got back to.
     if current not in choices:
         choices = [current] + choices
     return choices[(choices.index(current) + step) % len(choices)]
@@ -674,6 +679,17 @@ class RadioInterface:
         self.level_meter = LevelMeter(loglevel=loglevel, logfile=logfile)
         self.level_meter.enabled = self.VU_METER
         self.MOUSE = settings.get_bool(self.config, "SETTINGS", "mouse")
+        # The clock and date formats, and the lists to choose from, without broken ones
+        self.load_formats()
+        # Show songs when they start in the audio, see song_delay
+        self.SYNC = settings.get_bool(self.config, "SETTINGS", "sync_song_info")
+        # Until the audio's delay is measured, a few seconds after it starts, use the last run's
+        try:
+            self.api.audioPlayer.lag = float(self.config["SETTINGS"].get("sync_lag", ""))
+        except ValueError:
+            pass
+        # The sync problem last told about, so each is told once
+        self.sync_problem_shown = None
         # Whether the terminal is reporting the mouse right now
         self.mouse_on = False
         self.windows_mouse = None
@@ -733,6 +749,7 @@ class RadioInterface:
         self.settings_clock = ""
         self.settings_date = ""
         self.settings_notify = set(ALL_NOTIFICATIONS)
+        self.settings_sync = True
         # Notifications picker: the focused row (the kinds, then OK and Cancel), and the kinds ticked
         self.notify_field = 0
         self.notify_kinds = set()
@@ -753,6 +770,9 @@ class RadioInterface:
         # Help dialog: first visible line, and how many lines fit
         self.help_scroll = 0
         self.help_height = len(HELP)
+        # Stream info dialog: the first row shown, and how many fit
+        self.info_scroll = 0
+        self.info_height = 1
 
         if sys.platform == "win32" and sys.stdin and sys.stdin.isatty():
             # blessed reads the keys one byte at a time. In text mode, Windows holds back Enter to see
@@ -786,13 +806,47 @@ class RadioInterface:
             self.logger.log.info("===== Player exited =====")
         self.api.audioPlayer.shutdown()
 
+    def load_formats(self):
+        # The clock and date formats in use and the lists Settings cycles through, leaving out
+        # broken formats. A broken one in use is replaced by the first good one in its list, or
+        # the default. settings.ini keeps what it has, so it can be fixed by hand.
+        self.format_problems = []
+        self.bad_formats = []
+        for kind in ("clock", "date"):
+            formats = []
+            for fmt in settings.get_list(self.config, "SETTINGS", f"{kind}_formats"):
+                problem = settings.format_problem(fmt)
+                if problem:
+                    self.format_problems.append(f"The {kind} format {fmt!r} in {kind}_formats {problem}")
+                    self.bad_formats.append(fmt)
+                elif fmt not in formats:
+                    formats.append(fmt)
+            current = self.config["SETTINGS"][f"{kind}_format"]
+            problem = settings.format_problem(current)
+            if problem:
+                self.format_problems.append(f"The {kind} format {current!r} {problem}")
+                self.bad_formats.append(current)
+                current = formats[0] if formats else settings.DEFAULTS["SETTINGS"][f"{kind}_format"]
+            setattr(self, f"{kind}_format", current)
+            setattr(self, f"{kind}_formats", formats)
+        for problem in self.format_problems:
+            self.logger.log.warning(f"{problem}, so it is not used")
+
     def main(self):
         self.init_styles()
+        # The log says what is wrong with each
+        bad = list(dict.fromkeys(self.bad_formats))
+        if bad:
+            names = ", ".join(repr("".join(c if c.isprintable() else "?" for c in fmt)) for fmt in bad[:2])
+            more = " and more" if len(bad) > 2 else ""
+            plural = "s" if len(bad) > 1 else ""
+            self.notify(f"Bad format{plural} {names}{more} in settings.ini, see the log", STATUS_MESSAGE_SECONDS * 4, kind="error")
         self.set_station(self.station)
         self.set_mouse(self.MOUSE)
         try:
             while self.running:
                 self.read_keys()
+                self.check_sync()
                 self.check_new_song()
                 self.save_last_volume()
                 self.update_title()
@@ -873,6 +927,8 @@ class RadioInterface:
             self.exit_dialog_key(key)
         elif self.mode == "help":
             self.help_dialog_key(key)
+        elif self.mode == "stream_info":
+            self.stream_info_dialog_key(key)
         elif self.mode == "about":
             if key in ENTER_KEYS + ("KEY_ESCAPE", " ", "KEY_F1"):
                 self.mode = "main"
@@ -907,7 +963,7 @@ class RadioInterface:
         # Volume by one on the main screen, otherwise moves in the list that is open
         if self.mode == "main":
             self.change_volume(-step)
-        elif self.mode in ("stations", "history", "help", "menu"):
+        elif self.mode in ("stations", "history", "help", "menu", "stream_info"):
             self.handle_key("KEY_DOWN" if step > 0 else "KEY_UP")
 
     def click(self, y, x):
@@ -1039,6 +1095,7 @@ class RadioInterface:
             # The buttons are one row: going down from the last field lands on OK
             self.settings_field = field if on_buttons else field + 1
         elif key == "KEY_UP":
+            # Up from the buttons lands on the last field
             self.settings_field = SETTINGS_NOTIFY if on_buttons else max(SETTINGS_START, field - 1)
         elif key in ("KEY_TAB", "KEY_BTAB"):
             step = 1 if key == "KEY_TAB" else -1
@@ -1052,9 +1109,11 @@ class RadioInterface:
             elif field == SETTINGS_VOLUME:
                 self.settings_volume = step_start_volume(self.settings_volume, step * 10)
             elif field == SETTINGS_CLOCK:
-                self.settings_clock = cycle(CLOCK_FORMATS, self.settings_clock, step)
+                self.settings_clock = cycle(self.clock_formats, self.settings_clock, step)
             elif field == SETTINGS_DATE:
-                self.settings_date = cycle(DATE_FORMATS, self.settings_date, step)
+                self.settings_date = cycle(self.date_formats, self.settings_date, step)
+            elif field == SETTINGS_SYNC:
+                self.settings_sync = not self.settings_sync
             elif field in (SETTINGS_OK, SETTINGS_CANCEL):
                 self.settings_field = SETTINGS_CANCEL if field == SETTINGS_OK else SETTINGS_OK
         elif key in ENTER_KEYS + (" ",) and field == SETTINGS_NOTIFY:
@@ -1064,7 +1123,11 @@ class RadioInterface:
             self.config.set("SETTINGS", "start_volume", str(self.settings_volume))
             self.config.set("SETTINGS", "clock_format", self.settings_clock)
             self.config.set("SETTINGS", "date_format", self.settings_date)
+            self.clock_format = self.settings_clock
+            self.date_format = self.settings_date
             self.config.set("SETTINGS", "notifications", format_notifications(self.settings_notify))
+            self.config.set("SETTINGS", "sync_song_info", f"{self.settings_sync}")
+            self.SYNC = self.settings_sync
             self.save_config()
             self.notify("Settings saved")
             self.mode = "main"
@@ -1128,6 +1191,18 @@ class RadioInterface:
             step = 1 if key == "KEY_DOWN" else self.help_height
             self.help_scroll = min(last, self.help_scroll + step)
         elif key in ENTER_KEYS + ("KEY_ESCAPE", " ", "KEY_F1"):
+            self.mode = "main"
+
+    def stream_info_dialog_key(self, key):
+        # Scrolls like Help when the window is too short for all of it. The drawing keeps the
+        # scroll within the rows.
+        if key in ("KEY_UP", "KEY_PGUP"):
+            step = 1 if key == "KEY_UP" else self.info_height
+            self.info_scroll = max(0, self.info_scroll - step)
+        elif key in ("KEY_DOWN", "KEY_PGDOWN"):
+            step = 1 if key == "KEY_DOWN" else self.info_height
+            self.info_scroll += step
+        elif key in ENTER_KEYS + ("KEY_ESCAPE", " "):
             self.mode = "main"
 
     def notifications_dialog_key(self, key):
@@ -1202,6 +1277,7 @@ class RadioInterface:
                 "~H~elp",
                 [
                     ("~K~eys...", "F1", self.open_help, False, False),
+                    ("~S~tream info...", None, self.open_stream_info, False, False),
                     ("~N~ightride.fm on web", None, self.open_website, False, False),
                     None,
                     ("~A~bout...", None, self.open_about, False, False),
@@ -1231,6 +1307,11 @@ class RadioInterface:
 
     def open_about(self):
         self.mode = "about"
+
+    def open_stream_info(self):
+        self.mode = "stream_info"
+        self.info_scroll = 0
+        self.api.check_stream_format(self.station)
 
     ### Clicks ###
 
@@ -1307,12 +1388,66 @@ class RadioInterface:
         self.history_search = True
 
     def history_songs(self):
-        # The playing station's songs, newest first
-        return list(reversed(self.api.history[self.station]))
+        # The playing station's songs heard so far, newest first
+        return list(reversed(self.heard_history(self.station)))
+
+    def song_delay(self, station=None):
+        # Seconds from a song's start time in the song info to when it is heard. The song info
+        # comes some seconds before the song starts in the live audio stream, and the audio heard
+        # is behind the live stream by the past audio the server sent when the player connected.
+        # Zero when not syncing, for other stations than the one playing, or when the delay isn't
+        # known.
+        if not self.SYNC or station not in (None, self.station):
+            return 0
+        lag = self.api.audioPlayer.lag
+        if lag is None or self.api.gap_problem:
+            return 0
+        return lag + (self.api.gap or 0)
+
+    def heard_history(self, station):
+        # The station's songs that have started in the audio heard, oldest first. If none has,
+        # the oldest known song, as nothing better is known.
+        songs = list(self.api.history[station])
+        delay = self.song_delay(station)
+        if not delay:
+            return songs
+        heard = [song for song in songs if song["started_at"] + delay <= time.time()]
+        return heard or songs[:1]
+
+    def heard_song(self, station=None):
+        # The song heard now on station (the playing one by default), or for other stations the
+        # song the song info says is playing
+        station = station or self.station
+        if self.song_delay(station):
+            songs = self.heard_history(station)
+            if songs:
+                return songs[-1]
+        return self.api.now_playing.get(station, {})
+
+    def check_sync(self):
+        # Tells once about a problem syncing the song info with the audio. The log has the details.
+        problem = None
+        if self.SYNC:
+            problem = self.api.audioPlayer.lag_problem or self.api.gap_problem
+        if problem != self.sync_problem_shown:
+            if problem:
+                self.notify("Song info is not in sync with the audio", STATUS_MESSAGE_SECONDS * 2, kind="error")
+            self.sync_problem_shown = problem
+        # Keep the measurements, so the next start can sync right away. The audio's delay is
+        # measured again a few seconds after each connection.
+        gap = self.api.gap
+        lag = self.api.audioPlayer.lag if self.api.audioPlayer.lag_measured else None
+        changed = False
+        for key, value in (("sync_gap", gap), ("sync_lag", lag)):
+            if value is not None and self.config["SETTINGS"].get(key) != f"{value:.1f}":
+                self.config.set("SETTINGS", key, f"{value:.1f}")
+                changed = True
+        if changed:
+            self.save_config()
 
     def open_search(self, song=None, back_to="main"):
         # Asks where to look for a song, the one playing if none is given
-        song = song or self.api.now_playing.get(self.station, {})
+        song = song or self.heard_song()
         if not (song.get("artist") or song.get("song")):
             self.notify("No song info to look for", kind="error")
             return
@@ -1343,9 +1478,10 @@ class RadioInterface:
         start = self.config["SETTINGS"]["default_station"]
         self.settings_start = start if start in self.stations else "last"
         self.settings_volume = self.start_volume_setting()
-        self.settings_clock = self.config["SETTINGS"]["clock_format"]
-        self.settings_date = self.config["SETTINGS"]["date_format"]
+        self.settings_clock = self.clock_format
+        self.settings_date = self.date_format
         self.settings_notify = parse_notifications(self.config["SETTINGS"]["notifications"])
+        self.settings_sync = self.SYNC
 
     def open_notifications(self):
         # A picker on top of the settings dialog. Its choice is saved with the settings.
@@ -1477,7 +1613,7 @@ class RadioInterface:
 
     def update_title(self):
         # The song and station in the terminal's window or tab title, for when the player is in the background
-        info = self.api.now_playing.get(self.station, {})
+        info = self.heard_song()
         song = " – ".join(part for part in (info.get("artist"), info.get("song")) if part)
         title = f"{song} · {self.station}" if song else f"{self.station} · Nightride.fm"
         # Control characters in a song name could end the title early
@@ -1488,8 +1624,8 @@ class RadioInterface:
 
     def notify(self, message, seconds=STATUS_MESSAGE_SECONDS, kind="action"):
         # Shows message above the status line for a moment, if the settings allow its kind:
-        # "action" for what a key did, "song" for a new song, "error" always shows
-        if kind != "error" and kind not in parse_notifications(self.config["SETTINGS"]["notifications"]):
+        # "action" for what a key did, "song" for a new song, "error" for something going wrong
+        if kind not in parse_notifications(self.config["SETTINGS"]["notifications"]):
             return
         self.message = message
         self.message_until = time.time() + seconds
@@ -1497,7 +1633,7 @@ class RadioInterface:
     def check_new_song(self):
         # Announce a new song on the station that is playing. Not when changing stations: the new
         # station's song is already in the window then.
-        info = self.api.now_playing.get(self.station, {})
+        info = self.heard_song()
         song = (self.station, info.get("artist", ""), info.get("song", ""))
         if song == self.seen_song:
             return
@@ -1537,6 +1673,27 @@ class RadioInterface:
             self.put(y, x, part, hot_style if hot else style)
             x += len(part)
             hot = not hot
+
+    def scrollbar(self, y, x, height, first, shown, total, track_style, selected=None):
+        # A scroll bar in the column x, from row y down height rows, for a list showing shown of
+        # total rows from first on. Nothing if all of it fits. The arrows scroll by one when clicked.
+        # In a list with a selected row, the thumb shows where that row is in the whole list, so
+        # it moves with the selection even when the list doesn't scroll.
+        if total <= shown:
+            return
+        self.put(y, x, "▲", "scrollbar")
+        self.put(y + height - 1, x, "▼", "scrollbar")
+        self.zone(y, x, 1, lambda: self.handle_key("KEY_UP"))
+        self.zone(y + height - 1, x, 1, lambda: self.handle_key("KEY_DOWN"))
+        track = height - 2
+        if track > 0:
+            self.fill(y + 1, x, track, 1, track_style, "░")
+            # A solid block
+            if selected is None:
+                thumb = round(first / (total - shown) * (track - 1))
+            else:
+                thumb = round(selected / (total - 1) * (track - 1))
+            self.put(y + 1 + thumb, x, " ", "scrollbar")
 
     def fill(self, y, x, h, w, style, char=" "):
         for row in range(y, y + h):
@@ -1600,6 +1757,8 @@ class RadioInterface:
             self.draw_station_dialog()
         elif self.mode == "about":
             self.draw_about_dialog()
+        elif self.mode == "stream_info":
+            self.draw_stream_info_dialog()
         elif self.mode == "settings":
             self.draw_settings_dialog()
         elif self.mode == "notifications":
@@ -1629,9 +1788,9 @@ class RadioInterface:
             x += visible_len(title) + 2
         parts = []
         if self.DATE:
-            parts.append(format_time(self.config["SETTINGS"]["date_format"]))
+            parts.append(format_time(self.date_format))
         if self.CLOCK:
-            parts.append(format_time(self.config["SETTINGS"]["clock_format"]))
+            parts.append(format_time(self.clock_format))
         # In a narrow terminal the date goes first, then the clock
         while parts and x + len("  ".join(parts)) + 2 > self.cols:
             parts.pop(0)
@@ -1697,7 +1856,7 @@ class RadioInterface:
             self.put(top + 2, left + w - 3 - len(badge), badge, "warning")
         separator(top + 3)
 
-        info = self.api.now_playing.get(self.station, {})
+        info = self.heard_song()
         self.put(top + 4, label_x, "Artist", "label")
         # Padded with a space on both sides, which shows as a block in themes that give them a background
         artist = self.marquee("artist", info.get("artist", ""), value_width)
@@ -1716,7 +1875,7 @@ class RadioInterface:
         elif self.api.audioPlayer.no_output or self.api.audioPlayer.stuck:
             self.put(top + 6, value_x, " NO AUDIO OUTPUT ", "error")
         elif "started_at" in info:
-            seconds = max(0, int(time.time() - info["started_at"]))
+            seconds = max(0, int(time.time() - info["started_at"] - self.song_delay()))
             minutes, seconds = divmod(seconds, 60)
             self.put(top + 6, value_x, f"{minutes:02}:{seconds:02}", "value")
         else:
@@ -1814,18 +1973,13 @@ class RadioInterface:
             self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.dialog_sel else "list")
             self.zone(top + 2 + row, list_x + 1, len(text), lambda i=i: self.click_station(i))
 
-        if count > self.list_height:
-            # Scroll bar on the right edge of the list
-            bar_x = list_x + list_w - 1
-            self.put(top + 2, bar_x, "▲", "list")
-            self.put(top + 1 + self.list_height, bar_x, "▼", "list")
-            track = self.list_height - 2
-            if track > 0:
-                self.fill(top + 3, bar_x, track, 1, "list", "░")
-                thumb = round(self.dialog_sel / (count - 1) * (track - 1))
-                self.put(top + 3 + thumb, bar_x, "■", "list")
+        # On the right edge of the list
+        self.scrollbar(
+            top + 2, list_x + list_w - 1, self.list_height, self.dialog_scroll, self.list_height, count, "dialog",
+            selected=self.dialog_sel,
+        )
 
-        info = self.api.now_playing.get(self.stations[self.dialog_sel], {})
+        info = self.heard_song(self.stations[self.dialog_sel])
         info_y = top + self.list_height + 3
         self.put(info_y, left + 3, "Artist", "dialog")
         self.put(info_y, left + 11, self.marquee("stations_artist", info.get("artist", ""), w - 14), "dialog_value")
@@ -1838,7 +1992,7 @@ class RadioInterface:
 
     def draw_settings_dialog(self):
         w = 44
-        h = 15
+        h = 17
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Settings")
@@ -1855,13 +2009,20 @@ class RadioInterface:
             ("Startup volume", f"◄ {volume_text} ►"),
             ("Clock format", f"◄ {clip(format_time(self.settings_clock), 13):<13} ►"),
             ("Date format", f"◄ {clip(format_time(self.settings_date), 13):<13} ►"),
-            # Opens a picker, so it has a drop-down mark instead of arrows
-            ("Notifications", f"{clip(describe_notifications(self.settings_notify), 15):<15} ▼"),
+            ("Sync song info", f"◄ {'On' if self.settings_sync else 'Off':<13} ►"),
+            # A button that opens a picker, with how many kinds are on
+            ("Notifications", f"{describe_notifications(self.settings_notify):^17}"),
         ]
         for i, (label, value) in enumerate(fields):
             y = top + 2 + i * 2
             self.put(y, left + 3, label, "dialog")
-            self.put(y, left + 21, f" {value} ", "list_sel" if i == self.settings_field else "list")
+            if i == SETTINGS_NOTIFY:
+                self.button(
+                    y, left + 21, f" {value} ", i == self.settings_field,
+                    action=self.mode == "settings" and (lambda: self.click_setting(SETTINGS_NOTIFY)),
+                )
+            else:
+                self.put(y, left + 21, f" {value} ", "list_sel" if i == self.settings_field else "list")
             if self.mode == "settings":
                 # A click on the field chooses it, on its arrows changes it. The picker opens on a click.
                 self.zone(y, left + 3, w - 6, lambda i=i: self.click_setting(i))
@@ -1890,7 +2051,7 @@ class RadioInterface:
     def draw_notifications_dialog(self):
         w = 32
         boxes = len(NOTIFICATION_KINDS)
-        h = boxes + 8
+        h = boxes + 6
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", "Notifications")
@@ -1900,7 +2061,6 @@ class RadioInterface:
             text = f" [{mark}] {label:<{w - 12}}"
             self.put(top + 2 + i, left + 3, text, "list_sel" if i == self.notify_field else "list")
             self.zone(top + 2 + i, left + 3, len(text), lambda i=i: self.click_notification(i, " "))
-        self.put(top + 3 + boxes, left + 3, "Errors always show.", "dialog")
 
         buttons_y = top + h - 3
         self.button(
@@ -1937,16 +2097,15 @@ class RadioInterface:
             if i >= len(songs):
                 break
             song = songs[i]
-            started = time.strftime("%H:%M", time.localtime(song["started_at"]))
+            started = time.strftime("%H:%M", time.localtime(song["started_at"] + self.song_delay()))
             name = " – ".join(part for part in (song["artist"], song["song"]) if part)
             text = clip(f" {started}  {name}", list_w - 3).ljust(list_w - 2)
             self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.history_sel else "list")
             self.zone(top + 2 + row, list_x + 1, list_w - 2, lambda i=i: self.click_history(i))
-        bar_x = list_x + list_w - 1
-        if self.history_scroll > 0:
-            self.put(top + 2, bar_x, "▲", "dialog")
-        if self.history_scroll + self.history_height < len(songs):
-            self.put(top + 1 + self.history_height, bar_x, "▼", "dialog")
+        self.scrollbar(
+            top + 2, list_x + list_w - 1, self.history_height, self.history_scroll, self.history_height, len(songs), "dialog",
+            selected=self.history_sel,
+        )
 
         info_y = top + self.history_height + 3
         self.put(info_y, left + 3, clip("Songs from about the last hour, newest first", w - 6), "dialog")
@@ -2007,10 +2166,8 @@ class RadioInterface:
                 self.put(y, left + 5, keys, "dialog_key")
                 self.put(y, left + 19, description, "dialog")
 
-        if self.help_scroll > 0:
-            self.put(top + 2, left + w - 1, "▲", "dialog_border")
-        if self.help_scroll + self.help_height < len(HELP):
-            self.put(top + 1 + self.help_height, left + w - 1, "▼", "dialog_border")
+        # On the right edge of the window
+        self.scrollbar(top + 2, left + w - 1, self.help_height, self.help_scroll, self.help_height, len(HELP), "dialog_border")
         self.button(top + h - 3, left + (w - 8) // 2, "   OK   ", True, action=self.close_dialog)
 
     def draw_exit_dialog(self):
@@ -2047,6 +2204,126 @@ class RadioInterface:
         centered(top + 7, AUTHOR_EMAIL, "link", self.copy_email)
         centered(top + 8, REPOSITORY, "link", self.open_repository)
         self.button(top + 10, left + (w - 8) // 2, "   OK   ", True, action=self.close_dialog)
+
+
+    def stream_info(self):
+        # The rows of Help > Stream info: (label, value, style of the value)
+        player = self.api.audioPlayer
+        stats = player.stats
+        now = time.time()
+        rows = [("Station", self.station, "dialog_value")]
+        rows.append(("Address", player.url.split("://")[-1], "dialog_value"))
+
+        if player.error:
+            status = ("Stream error, still trying", "error")
+        elif player.reconnecting:
+            status = ("Reconnecting", "warning")
+        elif player.no_output or player.stuck:
+            status = ("No audio output", "error")
+        elif player.playing_since is None:
+            status = ("Stopped", "warning")
+        elif stats is None:
+            status = ("Connecting", "warning")
+        else:
+            status = (f"Playing for {duration(now - player.playing_since)}", "dialog_value")
+        rows.append(("Status", *status))
+
+        fmt = self.api.stream_format.get(self.station)
+        if fmt is None:
+            rows.append(("Format", "Checking...", "dialog"))
+        elif "error" in fmt:
+            rows.append(("Format", "Could not check, see the log", "warning"))
+        else:
+            kind = {"audio/mpeg": "MP3", "audio/aac": "AAC", "audio/aacp": "AAC", "audio/ogg": "Ogg"}.get(
+                fmt["type"], fmt["type"] or "?"
+            )
+            parts = [kind]
+            if fmt["kbits"]:
+                parts.append(f"{fmt['kbits']} kbit/s")
+            if fmt["samplerate"].isdigit():
+                parts.append(f"{int(fmt['samplerate']) / 1000:g} kHz")
+            if fmt["channels"]:
+                parts.append({"1": "mono", "2": "stereo"}.get(fmt["channels"], f"{fmt['channels']} channels"))
+            rows.append(("Format", ", ".join(parts), "dialog_value"))
+
+        if stats:
+            received = f"{stats['received'] / 1_000_000:.1f} MB"
+            if stats["kbits"]:
+                received += f" at {stats['kbits']:.0f} kbit/s"
+            rows.append(("Received", received, "dialog_value"))
+            problems = [
+                f"{count} {name}"
+                for count, name in (
+                    (stats["lost"], "lost"), (stats["corrupted"], "broken"), (stats["discontinuities"], "gaps")
+                )
+                if count
+            ]
+            rows.append(("Dropouts", ", ".join(problems) if problems else "None", "warning" if problems else "dialog_value"))
+        else:
+            rows.append(("Received", "-", "dialog"))
+            rows.append(("Dropouts", "-", "dialog"))
+        rows.append(("Reconnects", str(player.reconnects) if player.reconnects else "None", "dialog_value"))
+
+        if player.lag_problem:
+            rows.append(("Behind live", "Can't tell, see the log", "warning"))
+        elif player.lag is None:
+            rows.append(("Behind live", "Measuring...", "dialog"))
+        else:
+            rows.append(("Behind live", f"{player.lag:.1f} s", "dialog_value"))
+
+        # The connection to nightride.fm's song info, which says what each station plays
+        if self.api.connected:
+            rows.append(("Song info feed", "Connected", "dialog_value"))
+        else:
+            rows.append(("Song info feed", f"Disconnected for {duration(now - self.api.disconnected_since)}", "warning"))
+        if self.api.gap_problem:
+            rows.append(("Song info gap", "Can't tell, see the log", "warning"))
+        elif self.api.gap is None:
+            rows.append(("Song info gap", "Not measured yet", "dialog"))
+        else:
+            measured = self.api.gap_measured_at
+            when = f", measured {time.strftime('%H:%M', time.localtime(measured))}" if measured else ", from before"
+            rows.append(("Song info gap", f"{self.api.gap:.1f} s{when}", "dialog_value"))
+        delay = self.song_delay()
+        if not self.SYNC:
+            rows.append(("Sync", "Off", "dialog_value"))
+        elif delay:
+            rows.append(("Sync", f"Songs show {delay:.1f} s after the info", "dialog_value"))
+        else:
+            rows.append(("Sync", "Not in sync yet", "warning"))
+        return rows
+
+    def draw_stream_info_dialog(self):
+        rows = self.stream_info()
+        w = min(56, self.cols - 4)
+        # Shrink to fit short terminals, and scroll what doesn't fit
+        self.info_height = max(1, min(len(rows), self.rows - 9))
+        self.info_scroll = max(0, min(self.info_scroll, len(rows) - self.info_height))
+        h = self.info_height + 6
+        top = 1 + (self.rows - 2 - (h + 1)) // 2
+        left = (self.cols - (w + 2)) // 2
+        self.window(top, left, h, w, "dialog", "dialog_border", "Stream Info")
+        # On the right edge of the window
+        self.scrollbar(top + 2, left + w - 1, self.info_height, self.info_scroll, self.info_height, len(rows), "dialog_border")
+        shown = rows[self.info_scroll:self.info_scroll + self.info_height]
+        for i, (label, value, style) in enumerate(shown):
+            self.put(top + 2 + i, left + 3, label, "dialog")
+            if style in ("warning", "error"):
+                # Marked like the badges on the main screen, padded with a space on both sides
+                self.put(top + 2 + i, left + 18, f" {clip(value, w - 23)} ", style)
+            else:
+                self.put(top + 2 + i, left + 19, clip(value, w - 22), style)
+        self.button(top + h - 3, left + (w - 8) // 2, "   OK   ", True, action=self.close_dialog)
+
+
+def duration(seconds):
+    # Like "45 s", "12 min" or "2 h 5 min"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds} s"
+    if seconds < 3600:
+        return f"{seconds // 60} min"
+    return f"{seconds // 3600} h {seconds % 3600 // 60} min"
 
 
 def test_stream(station, sound=True):
