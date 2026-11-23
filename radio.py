@@ -17,8 +17,8 @@ from logger import Logger
 from paths import LOG_FILE
 from screen import Screen, clip, text_width
 
-from LevelMeter import CEILING_DB, FLOOR_DB, LevelMeter
-from NightrideAPI import NightRideAPI
+from level_meter import CEILING_DB, FLOOR_DB, LevelMeter
+from nightride_api import NightRideAPI
 
 # Colours by name. The first 16 are the VGA text mode palette. Terminals with true colour show these
 # exactly. On others, blessed picks the closest colour they have.
@@ -2050,7 +2050,7 @@ class RadioInterface:
 
 def test_stream(station, sound=True):
     # Plays a station for a few seconds without the interface. Returns True if it played.
-    from AudioPlayer import AudioPlayer
+    from audio_player import AudioPlayer
 
     config = settings.load()
     vlc_args = () if sound else ("--aout=dummy",)

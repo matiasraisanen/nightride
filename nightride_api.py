@@ -11,7 +11,7 @@ import settings
 from logger import Logger
 from paths import HISTORY_FILE, LOG_FILE
 
-from AudioPlayer import AudioPlayer
+from audio_player import AudioPlayer
 
 # The server sends a keepalive event every 20 seconds or so. This long without any data means the
 # connection has silently dropped.

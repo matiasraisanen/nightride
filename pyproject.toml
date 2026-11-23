@@ -18,7 +18,7 @@ dependencies = [
 Homepage = "https://github.com/matiasraisanen/nightride"
 
 [project.scripts]
-nightride = "Radio:main"
+nightride = "radio:main"
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -26,10 +26,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = [
-    "Radio",
-    "NightrideAPI",
-    "AudioPlayer",
-    "LevelMeter",
+    "radio",
+    "nightride_api",
+    "audio_player",
+    "level_meter",
     "audio_streams",
     "logger",
     "paths",

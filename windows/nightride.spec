@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_submodules
 ROOT = os.path.dirname(SPECPATH)
 
 a = Analysis(
-    [os.path.join(ROOT, "Radio.py")],
+    [os.path.join(ROOT, "radio.py")],
     pathex=[ROOT],
     datas=[
         (os.path.join(ROOT, "settings.ini"), "."),
