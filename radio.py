@@ -352,7 +352,7 @@ HELP = [
     ("M", "Mute"),
     ("F2", "Stations"),
     ("F3", "Recently played"),
-    ("W", "Web search for the song"),
+    ("F", "Find this song"),
     ("V", "VU meter on/off"),
     ("C  D", "Clock, date on/off"),
     ("T  Shift-T", "Next, previous theme"),
@@ -368,12 +368,12 @@ HELP = [
     None,
     ("Mouse", None),
     ("Click", "Menus, buttons, key hints"),
-    ("Double-click", "Play or search in a list"),
+    ("Double-click", "Play or find in a list"),
     ("Wheel", "Volume, or scroll a list"),
     ("Click volume", "◄ ► step, bar sets level"),
     ("Click number", "Mute"),
     ("Click station", "Stations"),
-    ("Click song", "Web search"),
+    ("Click song", "Find this song"),
 ]
 
 # Status line hints that do something when clicked: the hint's key => the key it sends
@@ -409,7 +409,8 @@ NOTIFICATION_KINDS = [
 ]
 ALL_NOTIFICATIONS = {kind for kind, _, _ in NOTIFICATION_KINDS}
 
-# Web search sites: (name, setting with its address, whether the station's name is added to the search).
+# Sites for Find this song: (name, setting with its search address, whether the station's name is
+# added to the search).
 # Bandcamp and YouTube look for every word, so only Google gets the station.
 # Bandcamp comes first and has focus when the dialog opens, with Cancel right below it.
 SEARCH_SITES = [
@@ -736,12 +737,12 @@ class RadioInterface:
         self.notify_field = 0
         self.notify_kinds = set()
         # Recently played dialog: the chosen song (0 is the newest), the first one shown, how many
-        # fit, and whether "Search" has focus (otherwise "Close")
+        # fit, and whether "Find" has focus (otherwise "Close")
         self.history_sel = 0
         self.history_scroll = 0
         self.history_height = 1
         self.history_search = True
-        # Web search dialog: the song, the site with focus, and the screen to go back to
+        # Find this song dialog: the song, the site with focus, and the screen to go back to
         self.search_song = {}
         self.search_choice = SEARCH_DEFAULT
         # The site to go back to from Cancel
@@ -958,7 +959,7 @@ class RadioInterface:
             self.toggle_date()
         elif key in ("t", "T"):
             self.step_theme(1 if key == "t" else -1)
-        elif key == "w":
+        elif key == "f":
             self.open_search()
         elif key == "KEY_F1":
             self.open_help()
@@ -1089,7 +1090,7 @@ class RadioInterface:
             self.history_sel = 0
         elif key == "KEY_END":
             self.history_sel = last
-        elif (key == "w" or (key in ENTER_KEYS and self.history_search)) and songs:
+        elif (key == "f" or (key in ENTER_KEYS and self.history_search)) and songs:
             self.open_search(songs[self.history_sel], back_to="history")
         elif key in ENTER_KEYS + ("KEY_ESCAPE", "KEY_F3"):
             self.mode = "main"
@@ -1170,7 +1171,7 @@ class RadioInterface:
                 [
                     ("~S~tations...", "F2", self.open_station_dialog, False, False),
                     ("~R~ecently played...", "F3", self.open_history, False, False),
-                    ("~W~eb search...", "W", self.open_search, False, False),
+                    ("~F~ind this song...", "F", self.open_search, False, False),
                     None,
                     ("~M~ute", "M", self.toggle_mute, self.muted, True),
                     None,
@@ -1310,10 +1311,10 @@ class RadioInterface:
         return list(reversed(self.api.history[self.station]))
 
     def open_search(self, song=None, back_to="main"):
-        # Asks where to search for a song, the one playing if none is given
+        # Asks where to look for a song, the one playing if none is given
         song = song or self.api.now_playing.get(self.station, {})
         if not (song.get("artist") or song.get("song")):
-            self.notify("No song info to search for", kind="error")
+            self.notify("No song info to look for", kind="error")
             return
         self.mode = "search"
         self.search_song = song
@@ -1951,7 +1952,7 @@ class RadioInterface:
         self.put(info_y, left + 3, clip("Songs from about the last hour, newest first", w - 6), "dialog")
         buttons_y = top + h - 3
         self.button(
-            buttons_y, left + w // 2 - 12, " Search ", self.history_search,
+            buttons_y, left + w // 2 - 12, "  Find  ", self.history_search,
             action=lambda: self.history_button(True),
         )
         self.button(
@@ -1964,15 +1965,15 @@ class RadioInterface:
         h = 10
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
-        self.window(top, left, h, w, "dialog", "dialog_border", "Web Search")
+        self.window(top, left, h, w, "dialog", "dialog_border", "Find This Song")
 
         def centered(y, text, style):
             text = clip(text, w - 4)
             self.put(y, left + (w - text_width(text)) // 2, text, style)
 
         song = self.search_song
-        centered(top + 2, "Search the web for", "dialog")
-        centered(top + 3, " – ".join(part for part in (song.get("artist"), song.get("song")) if part), "dialog_value")
+        centered(top + 2, " – ".join(part for part in (song.get("artist"), song.get("song")) if part), "dialog_value")
+        centered(top + 4, "Look for it on", "dialog")
         labels = [f" {name} " for name, _, _ in SEARCH_SITES]
         x = first_x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
         for i, label in enumerate(labels):

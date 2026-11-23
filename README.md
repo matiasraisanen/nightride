@@ -10,7 +10,7 @@ This is an unofficial player, not made by Nightride FM. The music and the song i
 
 - All the Nightride FM stations: nightride, chillsynth, datawave, spacesynth, darksynth, horrorsynth and ebsm
 - The song playing now, and the songs played during the last hour
-- Web search for a song on Bandcamp, YouTube or Google
+- Find the song on Bandcamp, YouTube or Google
 - A stereo VU meter that measures the music itself
 - Seven colour themes, from synthwave neon to a green CRT monitor
 - Works with the keyboard and the mouse
@@ -78,7 +78,7 @@ Use the keys below, or the menus: press **F10**, or **Alt** and the red letter o
 | **M** | Mute |
 | **F2** | Stations |
 | **F3** | Recently played songs |
-| **W** | Search the web for the song |
+| **F** | Find this song on Bandcamp, YouTube or Google |
 | **V** | VU meter on or off |
 | **C**, **D** | Clock, date on or off |
 | **T**, **Shift**-**T** | Next, previous theme |
@@ -91,7 +91,7 @@ In the menus and dialogs, the arrow keys and **Tab** move, **Enter** chooses and
 
 ### Menus
 
-- *Radio*: Stations, Recently played, Web search, Mute, Exit
+- *Radio*: Stations, Recently played, Find this song, Mute, Exit
 - *Options*: VU meter, Clock, Date, Mouse, and *Settings*
 - *Theme*: the colour themes. The highlighted theme shows right away. **Enter** keeps it, and **Esc** goes back to the one you had.
   - *Synthwave*: purple and cyan on dark grey (the default)
@@ -107,8 +107,8 @@ In the menus and dialogs, the arrow keys and **Tab** move, **Enter** chooses and
 ### Mouse
 
 - Click the menus, the buttons and the key hints on the bottom line.
-- In *Stations* and *Recently played*, click to pick a row, and double-click to play the station or search for the song.
-- On the main screen, click the station to open *Stations*, and the artist or song to search the web. Click the volume bar to set the volume, the arrows next to it to step by 10, and the number to mute.
+- In *Stations* and *Recently played*, click to pick a row, and double-click to play the station or find the song.
+- On the main screen, click the station to open *Stations*, and the artist or song to find it. Click the volume bar to set the volume, the arrows next to it to step by 10, and the number to mute.
 - The scroll wheel changes the volume on the main screen, and scrolls the lists.
 
 While the player has the mouse, most terminals select text with **Shift** held down. *Options* → *Mouse* turns the mouse off.
@@ -138,7 +138,7 @@ The settings start as a copy of [settings.ini](./settings.ini). Most of them can
 | `theme` | One of the theme names |
 | `vu_meter`, `clock`, `date`, `mouse` | `True` or `False` |
 | `[STATIONS]` | The stations and their number keys |
-| `[URLS]` | The stream and song info addresses, the website, and the web search addresses. `{query}` is replaced with the song. |
+| `[URLS]` | The stream and song info addresses, the website, and the sites for *Find this song*. `{query}` is replaced with the song. |
 
 The log is kept across restarts, with each start and exit marked. It keeps the last day, and at most about 1 MB. Recently played songs are kept for an hour after the player is closed.
 
