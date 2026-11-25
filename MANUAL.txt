@@ -29,8 +29,8 @@ Contents
 1. STARTING THE PLAYER
 ----------------------
 
-Run "nightride" in a terminal. On Windows, you can also double-click
-nightride.exe.
+Run "nightride" in a terminal. On Windows, start "Nightride player" from the
+Start menu, or double-click nightride.exe if you use the zip version.
 
   nightride --test-stream [STATION]
       Plays a station for a few seconds without the interface, and says

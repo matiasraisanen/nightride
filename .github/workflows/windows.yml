@@ -1,0 +1,61 @@
+# Builds the Windows version with windows/build.ps1: the installer nightride-setup.exe and the
+# portable nightride-windows.zip.
+# - Publishing a release on GitHub attaches them to the release.
+# - Pull requests and running it by hand (Actions > Windows build > Run workflow) keep them as a
+#   download on the run, for trying a build without a release.
+name: Windows build
+
+on:
+  release:
+    types: [published]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Comes with Inno Setup 6
+    runs-on: windows-latest
+    permissions:
+      # To attach the files to the release
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the version
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # The installer takes its version from pyproject.toml, so the release must match it
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($env:TAG.TrimStart("v") -ne $version) {
+            throw "The release is $env:TAG, but pyproject.toml says version $version"
+          }
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+
+      - name: Build
+        shell: pwsh
+        run: windows\build.ps1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightride-windows
+          path: |
+            dist/nightride-setup.exe
+            dist/nightride-windows.zip
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload $env:TAG dist/nightride-setup.exe dist/nightride-windows.zip --clobber --repo $env:GITHUB_REPOSITORY

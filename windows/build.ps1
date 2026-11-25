@@ -1,5 +1,6 @@
 # Builds the stand-alone Windows version: dist\nightride\nightride.exe, with Python and VLC included,
-# and dist\nightride-windows.zip of that folder.
+# dist\nightride-windows.zip of that folder, and the installer dist\nightride-setup.exe of it if
+# Inno Setup 6 (https://jrsoftware.org/isinfo.php) is installed.
 #
 # Run in PowerShell from anywhere:
 #     powershell -ExecutionPolicy Bypass -File windows\build.ps1
@@ -87,6 +88,25 @@ Copy-Item (Join-Path $PSScriptRoot "README-windows.txt") (Join-Path $App "README
 $Zip = Join-Path $Dist "nightride-windows.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive $App $Zip
+
+### Installer ###
+
+$Setup = Join-Path $Dist "nightride-setup.exe"
+Remove-Item -Force $Setup -ErrorAction SilentlyContinue
+$Iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+if (-not $Iscc) {
+    $Iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+}
+if (Test-Path $Iscc) {
+    $Version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+    & $Iscc /Q "/DAppVersion=$Version" (Join-Path $PSScriptRoot "nightride.iss")
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+} else {
+    Write-Host "Inno Setup 6 not found, so no installer"
+    $Setup = $null
+}
+
 Write-Host ""
 Write-Host "Done: $App\nightride.exe"
 Write-Host "      $Zip"
+if ($Setup) { Write-Host "      $Setup" }

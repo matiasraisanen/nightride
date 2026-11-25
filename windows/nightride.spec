@@ -30,5 +30,7 @@ exe = EXE(
     name="nightride",
     console=True,
     upx=False,
+    # The program's icon, for the exe and its shortcuts. make_icon.py makes it from nightride.svg.
+    icon=os.path.join(SPECPATH, "nightride.ico"),
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="nightride", upx=False)

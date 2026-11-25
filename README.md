@@ -20,9 +20,13 @@ This is an unofficial player, not made by Nightride FM. The music and the song i
 
 ### Windows
 
-1. Download `nightride-windows.zip` from the [latest release](https://github.com/matiasraisanen/nightride/releases/latest).
-2. Unzip it anywhere, and keep the files together.
-3. Double-click `nightride.exe`, or run `nightride` in that folder from cmd.exe or PowerShell.
+1. Download `nightride-setup.exe` from the [latest release](https://github.com/matiasraisanen/nightride/releases/latest).
+2. Run it. It installs the player for you only, so it doesn't ask for administrator rights.
+3. Start *Nightride player* from the Start menu.
+
+Windows may say *Windows protected your PC*, because the installer isn't signed with a paid certificate. Click *More info*, then *Run anyway*. *Installed apps* in the Windows settings uninstalls it.
+
+Or, to run it without installing, download `nightride-windows.zip`, unzip it anywhere, keep the files together, and double-click `nightride.exe`.
 
 Python and VLC are included, so nothing else needs to be installed. It looks best in [Windows Terminal](https://aka.ms/terminal), the default terminal on Windows 11.
 
@@ -68,7 +72,14 @@ On Windows, with [uv](https://docs.astral.sh/uv/) or 64-bit Python installed, in
 
     powershell -ExecutionPolicy Bypass -File windows\build.ps1
 
-It downloads VLC, checks it, and packs the player, Python and VLC together with [PyInstaller](https://pyinstaller.org/). The result is in `dist\nightride\`, and zipped as `dist\nightride-windows.zip`.
+It downloads VLC, checks it, and packs the player, Python and VLC together with [PyInstaller](https://pyinstaller.org/). The result is in `dist\nightride\`, and zipped as `dist\nightride-windows.zip`. With [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed, it also makes the installer `dist\nightride-setup.exe` ([windows/nightride.iss](./windows/nightride.iss)).
+
+GitHub builds them too, on a Windows machine ([.github/workflows/windows.yml](./.github/workflows/windows.yml)):
+
+- **For a release:** set the version in `pyproject.toml`, then publish a release whose tag is that version, like `v2.0.0`. The build attaches `nightride-setup.exe` and `nightride-windows.zip` to the release.
+- **To try a build:** pull requests are built, and *Actions* → *Windows build* → *Run workflow* builds any branch. The files are a download on the run.
+
+The icon is [windows/nightride.svg](./windows/nightride.svg), and [windows/nightride-alt.svg](./windows/nightride-alt.svg) is a spare in other colours. After changing the icon, `python windows/make_icon.py` (with `cairosvg` and `pillow` installed) makes `windows/nightride.ico` again.
 
 ## Code
 
