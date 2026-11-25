@@ -81,7 +81,7 @@ if ($bits -ne "64") { throw "Python is $bits-bit, but the bundled VLC is 64-bit.
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 
 $App = Join-Path $Dist "nightride"
-Copy-Item README.md, LICENSE $App
+Copy-Item README.md, LICENSE, MANUAL.txt $App
 Copy-Item (Join-Path $PSScriptRoot "README-windows.txt") (Join-Path $App "README.txt")
 
 $Zip = Join-Path $Dist "nightride-windows.zip"

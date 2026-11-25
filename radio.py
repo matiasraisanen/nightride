@@ -14,7 +14,7 @@ import blessed
 
 import settings
 from logger import Logger
-from paths import LOG_FILE
+from paths import LOG_FILE, MANUAL_URL, find_manual
 from screen import Screen, clip, text_width
 
 from level_meter import CEILING_DB, FLOOR_DB, LevelMeter
@@ -550,7 +550,7 @@ def describe_notifications(kinds):
 
 
 def open_url(url):
-    # Opens url in the default browser. Browsers started from a terminal can print messages to it,
+    # Opens url in the default browser, or a file in its default app. Browsers started from a terminal can print messages to it,
     # which would mess up the interface, so their output goes nowhere.
     if sys.platform == "win32":
         os.startfile(url)
@@ -1303,6 +1303,7 @@ class RadioInterface:
                 "~H~elp",
                 [
                     ("~K~eys...", "F1", self.open_help, False, False),
+                    ("~U~ser manual", None, self.open_manual, False, False),
                     ("~S~tream info...", None, self.open_stream_info, False, False),
                     ("~N~ightride.fm on web", None, self.open_website, False, False),
                     None,
@@ -1397,6 +1398,20 @@ class RadioInterface:
         except OSError as e:
             self.logger.log.error(f"Could not open {url}: {e}")
             self.notify("Could not open the browser", kind="error")
+
+    def open_manual(self):
+        # Opens the manual in the system's text editor, as the terminal window may be small.
+        # Online if the file isn't there.
+        self.mode = "main"
+        path = find_manual()
+        target = path or MANUAL_URL
+        self.logger.log.debug(f"Opening {target}")
+        try:
+            open_url(target)
+            self.notify("Opened the user manual" if path else "Opened the user manual on the web")
+        except OSError as e:
+            self.logger.log.error(f"Could not open {target}: {e}")
+            self.notify("Could not open the user manual", kind="error")
 
     def open_help(self):
         self.mode = "help"

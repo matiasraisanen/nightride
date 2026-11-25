@@ -5,6 +5,8 @@ Double-click nightride.exe, or run it from cmd.exe or PowerShell:
 
     nightride
 
+The user manual is MANUAL.txt in this folder, also in the player under Help > User manual.
+
 It looks best in Windows Terminal, the default terminal on Windows 11.
 Nothing needs to be installed: Python and VLC are included in this folder.
 Keep the files together. To start it from anywhere, add this folder to your PATH.

@@ -25,6 +25,25 @@ LOG_FILE = os.path.join(user_dir("state"), "radio.log")
 HISTORY_FILE = os.path.join(user_dir("state"), "history.json")
 # The settings that come with the code. A new user's settings start as a copy of these.
 DEFAULT_SETTINGS_FILE = os.path.join(BASE_DIR, "settings.ini")
+# The user manual, for Help > User manual: next to the code when running from source, next to
+# nightride.exe in the Windows build, or in the share folder of the environment it was installed in
+# with uv or pip. None if it can't be found.
+MANUAL_NAME = "MANUAL.txt"
+# The manual online, for when the file isn't there
+MANUAL_URL = "https://github.com/matiasraisanen/nightride/blob/main/MANUAL.txt"
+
+
+def find_manual():
+    places = [BASE_DIR, os.path.join(sys.prefix, "share", "nightride")]
+    if getattr(sys, "frozen", False):
+        places.insert(0, os.path.dirname(sys.executable))
+    for place in places:
+        path = os.path.join(place, MANUAL_NAME)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 # The Windows build comes with its own copy of VLC, so VLC doesn't need to be installed.
 # None when running from source: then the installed VLC is used.
 VLC_DIR = os.path.join(BASE_DIR, "vlc")
