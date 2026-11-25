@@ -1,4 +1,5 @@
 import collections
+import datetime
 import json
 import logging
 import os
@@ -19,11 +20,13 @@ READ_TIMEOUT_SECONDS = 90
 CONNECT_TIMEOUT_SECONDS = 10
 # Seconds to wait before each reconnect attempt. The last one repeats.
 RETRY_DELAYS = [2, 5, 10, 30]
-# Songs remembered per station for "Recently played"
-HISTORY_LENGTH = 20
-# Songs older than this are dropped from the saved history, so after a restart the list starts
-# from about the last hour
-HISTORY_KEEP_SECONDS = 60 * 60
+# Songs remembered per station, kept across restarts, plus the jingles between them. Recently played
+# shows 10, and the newest may not be heard yet when the song info is ahead of the audio.
+HISTORY_SONGS = 12
+# Recently played covers one listening session, however long, also past midnight. After a break
+# this long without song info (the player closed, the computer asleep or offline) it starts afresh.
+# A quick restart keeps it.
+LISTENING_BREAK_SECONDS = 2 * 60 * 60
 # The song info comes a few seconds before the song starts in the audio stream. The player measures
 # that gap this often, on the next song change, from the song titles inside the audio stream.
 GAP_MEASURE_SECONDS = 30 * 60
@@ -39,11 +42,85 @@ GAP_SETTLE_SECONDS = 4
 GAP_TIMEOUT_SECONDS = 30
 # The audio between song titles in the stream is this many bytes at most. Icecast uses 16000.
 MAX_METAINT = 64 * 1024
+# Each station also has an HLS stream: the audio in 4-second pieces, each tagged with the song
+# playing, its Spotify ID included. A new song's pieces show up in the list some 15 seconds after
+# the song info. Looking for them stops after this long.
+SPOTIFY_TIMEOUT_SECONDS = 90
+SPOTIFY_POLL_SECONDS = 4
+# The tags are at the start of a piece, in its first 300 bytes or so
+TAG_BYTES = 4096
+# Spotify track IDs are 22 letters and digits
+SPOTIFY_ID = re.compile(rb"(?<![0-9A-Za-z])[0-9A-Za-z]{22}(?![0-9A-Za-z])")
 
 
 def clean(text):
     # Control characters (newlines, tabs, null bytes) in a title would break the layout
     return "".join(c if c.isprintable() else " " for c in str(text)).strip()
+
+
+def song_kind(song):
+    # "jingle" for the station's jingles, read by an artist: "Nightride FM (Jingle)".
+    # "live" for live shows: "The State of Synth Live - Live on nightride".
+    # "song" for everything else.
+    title = song.get("song", "")
+    if re.search(r"\(jingle\)", title, re.IGNORECASE):
+        return "jingle"
+    if re.match(r"live on\b", title, re.IGNORECASE):
+        return "live"
+    return "song"
+
+
+def trim_history(songs):
+    # Drops the oldest entries of a station's history until it has HISTORY_SONGS songs. Jingles
+    # don't count, so the ones between the songs kept stay.
+    while sum(song_kind(song) != "jingle" for song in songs) > HISTORY_SONGS:
+        songs.popleft()
+
+
+def jingle_title(title):
+    # A jingle's title without the "(Jingle)" mark
+    return re.sub(r"\s*\(jingle\)", "", title, flags=re.IGNORECASE).strip()
+
+
+def read_id3(data):
+    # The text frames of the ID3v2.3 tag at the start of data: {frame id: bytes after the encoding byte}
+    if data[:3] != b"ID3":
+        return {}
+    end = 10 + sum(b << (7 * (3 - i)) for i, b in enumerate(data[6:10]))
+    pos, frames = 10, {}
+    while pos + 10 <= min(end, len(data)) and data[pos:pos + 4].strip(b"\0"):
+        frame_id = data[pos:pos + 4].decode("latin1")
+        size = int.from_bytes(data[pos + 4:pos + 8], "big")
+        frames[frame_id] = data[pos + 10:pos + 10 + size]
+        pos += 10 + size
+    return frames
+
+
+def id3_text(body):
+    encoding = {0: "latin1", 1: "utf-16", 2: "utf-16-be"}.get(body[:1][0] if body else 3, "utf-8")
+    return clean(body[1:].decode(encoding, "replace").strip("\0"))
+
+
+def parse_pdt(text):
+    # A program date time like 2026-11-25T08:28:17.866Z, as a unix timestamp
+    text = text.strip().replace("Z", "+00:00")
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z"):
+        try:
+            return datetime.datetime.strptime(text, fmt).timestamp()
+        except ValueError:
+            pass
+    raise ValueError(f"unknown time {text!r}")
+
+
+def same_song(tags, song):
+    # Whether a piece's tags are for song. The song info may have the artist in the title.
+    def norm(text):
+        return " ".join(text.lower().split())
+
+    artist, title = id3_text(tags.get("TPE1", b"")), id3_text(tags.get("TIT2", b""))
+    tagged = {norm(title), norm(f"{artist} - {title}")}
+    known = {norm(song["song"]), norm(f"{song['artist']} - {song['song']}")}
+    return bool(tagged & known - {"", "-"})
 
 
 class NightRideAPI:
@@ -73,9 +150,20 @@ class NightRideAPI:
 
         # Station => {"artist", "song", "started_at"}
         self.now_playing = {}
-        # Station => the songs played since the player started, newest last, as now_playing has them
-        self.history = collections.defaultdict(lambda: collections.deque(maxlen=HISTORY_LENGTH))
+        # Station => the songs played since the player started, newest last, as now_playing has them.
+        # A song can also have "spotify", its Spotify track ID, found a little after it starts.
+        self.history = collections.defaultdict(collections.deque)
+        # The history is added to by the metadata thread and the Spotify lookups, and saved by both
+        self.history_lock = threading.RLock()
+        # When song info last came (time.time()), also a keepalive, or None. For finding listening breaks.
+        self.last_heard = None
         self.load_history()
+        # Songs whose Spotify ID has been looked for: (station, started_at, artist, title)
+        self.spotify_lookups = set()
+        # For reading the tags in the HLS streams
+        self.tag_http = urllib3.PoolManager(
+            timeout=urllib3.Timeout(connect=CONNECT_TIMEOUT_SECONDS, read=CONNECT_TIMEOUT_SECONDS), retries=False
+        )
         # Whether the metadata stream is connected, and since when it hasn't been
         self.connected = False
         self.connected_at = None
@@ -134,6 +222,7 @@ class NightRideAPI:
                 raise RuntimeError(f"HTTP {response.status}")
             for event in sseclient.SSEClient(response).events():
                 self.logger.log.debug(f"SSE event received: {event.data}")
+                self.check_break()
                 if not self.connected:
                     self.logger.log.info("Metadata stream connected")
                     self.connected = True
@@ -176,15 +265,85 @@ class NightRideAPI:
             "song": title,
             "started_at": start_time,
         }
-        self.now_playing[station] = song
         # The same song can be sent again, e.g. after reconnecting
-        history = self.history[station]
-        if not history or (history[-1]["artist"], history[-1]["song"]) != (artist, title):
-            history.append(song)
-            self.save_history()
-            if time.monotonic() - self.connected_at > CONNECT_DUMP_SECONDS:
-                self.maybe_measure_gap(station, start_time)
+        with self.history_lock:
+            history = self.history[station]
+            if history and (history[-1]["artist"], history[-1]["song"]) == (artist, title):
+                # Keep what is known about it, like its Spotify ID
+                song = history[-1]
+                new = False
+            else:
+                history.append(song)
+                trim_history(history)
+                self.save_history()
+                new = True
+        self.now_playing[station] = song
+        if new and time.monotonic() - self.connected_at > CONNECT_DUMP_SECONDS:
+            self.maybe_measure_gap(station, start_time)
+        # Once per song. A song from the saved history may still be playing and not have its ID yet.
+        lookup = (station, song["started_at"], artist, title)
+        if song_kind(song) == "song" and "spotify" not in song and lookup not in self.spotify_lookups:
+            self.spotify_lookups.add(lookup)
+            threading.Thread(target=self.find_spotify_id, args=(station, song), daemon=True).start()
         self.logger.log.debug(f"New song detected on {station}: {artist} - {title}")
+
+    def find_spotify_id(self, station, song):
+        # Reads the song's Spotify ID from the tags in the station's HLS stream, into song["spotify"].
+        # Leaves it out if the song's pieces don't have one or can't be found.
+        deadline = time.time() + SPOTIFY_TIMEOUT_SECONDS
+        checked = set()
+        while time.time() < deadline:
+            try:
+                pieces = self.hls_pieces(station)
+                if pieces and pieces[0][0] > song["started_at"] + 1:
+                    # It started before the oldest piece listed, so only the newest can still be it
+                    candidates = pieces[-1:]
+                else:
+                    # Pieces start where songs do, and their times match the song info's to a fraction of a second
+                    candidates = [piece for piece in pieces if piece[0] >= song["started_at"] - 1][:3]
+                for _, url in candidates:
+                    if url in checked:
+                        continue
+                    checked.add(url)
+                    tags = read_id3(self.fetch(url, {"Range": f"bytes=0-{TAG_BYTES - 1}"}))
+                    if not same_song(tags, song):
+                        continue
+                    found = SPOTIFY_ID.search(tags.get("COMM", b""))
+                    if not found:
+                        self.logger.log.debug(f"No Spotify ID for {station}: {song['artist']} - {song['song']}")
+                        return
+                    with self.history_lock:
+                        song["spotify"] = found.group().decode()
+                        self.save_history()
+                    self.logger.log.debug(f"Spotify ID {song['spotify']} for {station}: {song['artist']} - {song['song']}")
+                    return
+                if checked and len(candidates) == 3:
+                    # The song's first pieces are listed and none had its tags. It's not going to show up.
+                    break
+            except Exception as e:
+                self.logger.log.debug(f"Could not read the tags in the HLS stream of {station}: {e}")
+            time.sleep(SPOTIFY_POLL_SECONDS)
+        self.logger.log.debug(f"Didn't find {station}: {song['artist']} - {song['song']} in the HLS stream")
+
+    def hls_pieces(self, station):
+        # The pieces listed in the station's HLS stream now, oldest first: [(start time, url)].
+        # Any quality has the same tags, so the smallest.
+        base = f"{self.audio_base_url}/hls/{station}"
+        pieces, start = [], None
+        for line in self.fetch(f"{base}/aac_lofi.m3u8").decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if line.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
+                start = parse_pdt(line.split(":", 1)[1])
+            elif line and not line.startswith("#") and start is not None:
+                pieces.append((start, f"{base}/{line}"))
+                start = None
+        return pieces
+
+    def fetch(self, url, headers=None):
+        response = self.tag_http.request("GET", url, headers=headers or {})
+        if response.status not in (200, 206):
+            raise RuntimeError(f"HTTP {response.status} from {url}")
+        return response.data
 
 
     def maybe_measure_gap(self, station, start_time):
@@ -321,22 +480,41 @@ class NightRideAPI:
             "channels": clean(info.get("channels", "")),
         }
 
+    def check_break(self):
+        # Song info is coming. After a listening break, Recently played starts afresh: before the
+        # songs the server sends on connecting are added.
+        now = time.time()
+        if self.last_heard is not None and now - self.last_heard > LISTENING_BREAK_SECONDS:
+            hours = (now - self.last_heard) / 3600
+            self.logger.log.info(f"No song info for {hours:.1f} hours. Recently played starts afresh.")
+            with self.history_lock:
+                self.history.clear()
+                self.save_history()
+        self.last_heard = now
+
     def load_history(self):
-        # The songs saved by the last run, if they are recent enough
+        # The songs saved by the last run, unless that was before a listening break. The file is
+        # saved on every new song on any station, so its time is about when the last run stopped.
         try:
+            saved_at = os.path.getmtime(HISTORY_FILE)
+            if time.time() - saved_at > LISTENING_BREAK_SECONDS:
+                hours = (time.time() - saved_at) / 3600
+                self.logger.log.info(f"Last listened {hours:.1f} hours ago. Recently played starts afresh.")
+                return
+            self.last_heard = saved_at
             with open(HISTORY_FILE, encoding="utf-8") as f:
                 saved = json.load(f)
-            cutoff = time.time() - HISTORY_KEEP_SECONDS
             for station, songs in saved.items():
                 for song in songs:
-                    if song["started_at"] >= cutoff:
-                        self.history[station].append(
-                            {
-                                "artist": str(song["artist"]),
-                                "song": str(song["song"]),
-                                "started_at": float(song["started_at"]),
-                            }
-                        )
+                    entry = {
+                        "artist": str(song["artist"]),
+                        "song": str(song["song"]),
+                        "started_at": float(song["started_at"]),
+                    }
+                    if SPOTIFY_ID.fullmatch(str(song.get("spotify", "")).encode()):
+                        entry["spotify"] = song["spotify"]
+                    self.history[station].append(entry)
+                trim_history(self.history[station])
         except FileNotFoundError:
             pass
         except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
@@ -344,11 +522,8 @@ class NightRideAPI:
 
     def save_history(self):
         # Write a new file and swap it in, so the player stopping halfway can't leave it broken
-        cutoff = time.time() - HISTORY_KEEP_SECONDS
-        recent = {
-            station: [song for song in songs if song["started_at"] >= cutoff]
-            for station, songs in list(self.history.items())
-        }
+        with self.history_lock:
+            recent = {station: [dict(song) for song in songs] for station, songs in list(self.history.items())}
         temp_file = HISTORY_FILE + ".tmp"
         try:
             with open(temp_file, "w", encoding="utf-8") as f:

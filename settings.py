@@ -17,6 +17,9 @@ DEFAULTS = {
         "bandcamp_search": "https://bandcamp.com/search?q={query}",
         "youtube_search": "https://www.youtube.com/results?search_query={query}",
         "google_search": "https://www.google.com/search?q={query}",
+        "spotify_search": "https://open.spotify.com/search/{query}",
+        # {id} is replaced with the song's Spotify ID, when the stream has it
+        "spotify_track": "https://open.spotify.com/track/{id}",
     },
     # The stations nightride.fm lists, in its order
     "STATIONS": {

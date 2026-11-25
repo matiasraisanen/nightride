@@ -9,8 +9,8 @@ This is an unofficial player, not made by Nightride FM. The music and the song i
 ## Features
 
 - All the Nightride FM stations: nightride, chillsynth, datawave, spacesynth, darksynth, horrorsynth and ebsm
-- The song playing now, and the songs played during the last hour
-- Find the song on Bandcamp, YouTube or Google
+- The song playing now, and the last 10 songs played. Station jingles and live shows are marked as such.
+- Find the song on Bandcamp, Spotify, YouTube or Google. Spotify opens the song itself when the stream says which one it is.
 - A stereo VU meter that measures the music itself
 - Seven colour themes, from synthwave neon to a green CRT monitor
 - Works with the keyboard and the mouse
@@ -77,8 +77,8 @@ Use the keys below, or the menus: press **F10**, or **Alt** and the red letter o
 | **Shift**-**↑** **↓** | Volume in steps of 1 |
 | **M** | Mute |
 | **F2** | Stations |
-| **F3** | Recently played songs |
-| **F** | Find this song on Bandcamp, YouTube or Google |
+| **F3** | Recently played songs, the last 10 |
+| **F** | Find this song on Bandcamp, Spotify, YouTube or Google |
 | **V** | VU meter on or off |
 | **C**, **D** | Clock, date on or off |
 | **T**, **Shift**-**T** | Next, previous theme |
@@ -164,9 +164,9 @@ The settings start as a copy of [settings.ini](./settings.ini). Most of them can
 | `theme` | One of the theme names |
 | `vu_meter`, `clock`, `date`, `mouse` | `True` or `False` |
 | `[STATIONS]` | The stations and their number keys |
-| `[URLS]` | The stream and song info addresses, the website, and the sites for *Find this song*. `{query}` is replaced with the song. |
+| `[URLS]` | The stream and song info addresses, the website, and the sites for *Find this song*. `{query}` is replaced with the song, and `{id}` in `spotify_track` with its Spotify ID. |
 
-The log is kept across restarts, with each start and exit marked. It keeps the last day, and at most about 1 MB. Recently played songs are kept for an hour after the player is closed.
+The log is kept across restarts, with each start and exit marked. It keeps the last day, and at most about 1 MB. Recently played covers the current listening session: it is kept when the player is restarted, and starts afresh after two hours without song info (the player closed, or the computer asleep or offline).
 
 ## Troubleshooting
 

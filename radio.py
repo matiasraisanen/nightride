@@ -18,7 +18,7 @@ from paths import LOG_FILE
 from screen import Screen, clip, text_width
 
 from level_meter import CEILING_DB, FLOOR_DB, LevelMeter
-from nightride_api import NightRideAPI
+from nightride_api import NightRideAPI, jingle_title, song_kind
 
 # Colours by name. The first 16 are the VGA text mode palette. Terminals with true colour show these
 # exactly. On others, blessed picks the closest colour they have.
@@ -320,6 +320,11 @@ THEMES = {
     "Green CRT": crt_theme("greenbright", "lightgreen", "green", "greendark"),
 }
 
+# Labels next to the song for jingles and live shows. In the menu bar's colors, which stand out
+# from the main window in every theme.
+for _theme in THEMES.values():
+    _theme.setdefault("badge", _theme["menu"])
+
 # Theme menu hotkeys, where the first letter is already taken
 THEME_HOTKEYS = {"Darksynth": "k"}
 
@@ -336,7 +341,7 @@ STATUS_HINTS = {
     "menu": [("←→", "Menus"), ("↑↓", "Select"), ("Enter", "Choose"), ("Esc", "Close")],
     "stations": [("↑↓", "Station"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Cancel")],
     "history": [("↑↓", "Song"), ("←→", "Button"), ("Enter", "Select"), ("Esc", "Close")],
-    "search": [("←→↑↓", "Move"), ("B Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
+    "search": [("←→↑↓", "Move"), ("B S Y G", "Open site"), ("Enter", "Open"), ("Esc", "Cancel")],
     "about": [("Enter", "Close")],
     "stream_info": [("↑↓", "Scroll"), ("Enter", "Close")],
     "help": [("↑↓", "Scroll"), ("Enter", "Close")],
@@ -424,13 +429,20 @@ ALL_NOTIFICATIONS = {kind for kind, _, _ in NOTIFICATION_KINDS}
 # Sites for Find this song: (name, setting with its search address, whether the station's name is
 # added to the search).
 # Bandcamp and YouTube look for every word, so only Google gets the station.
-# Bandcamp comes first and has focus when the dialog opens, with Cancel right below it.
+# Spotify opens the song itself when its Spotify ID is known, otherwise it searches.
+# Bandcamp always comes first and has focus, with Cancel right below it: buying the track there is
+# the best way to support the artist.
 SEARCH_SITES = [
     ("Bandcamp", "bandcamp_search", False),
+    ("Spotify", "spotify_search", False),
     ("YouTube", "youtube_search", False),
     ("Google", "google_search", True),
 ]
 SEARCH_DEFAULT = 0
+SEARCH_SPOTIFY = 1
+
+# Songs in Recently played, numbered 1 to 10. The number keys pick them, with 0 for the 10th.
+HISTORY_SHOWN = 10
 
 # Formats to choose from in the settings. settings.ini can have any other strftime format.
 MIN_COLS = 50
@@ -451,6 +463,18 @@ SONG_MESSAGE_SECONDS = 5.0
 MARQUEE_PAUSE = 2.0  # seconds to rest at the start of each loop
 MARQUEE_SPEED = 4.0  # characters per second
 MARQUEE_GAP = "  •  "  # between the end of the text and its start again, marking where the loop ends
+
+
+def song_line(song):
+    # The song on one line. Jingles and live shows say what they are, so they aren't taken for songs.
+    artist, title = song.get("artist", ""), song.get("song", "")
+    kind = song_kind(song)
+    if kind == "jingle":
+        return f"Jingle by {artist}" if artist else "Jingle"
+    if kind == "live":
+        # The title is just "Live on <station>"
+        return f"Live: {artist}" if artist else title
+    return " – ".join(part for part in (artist, title) if part)
 
 
 def hotkey(text):
@@ -1137,7 +1161,7 @@ class RadioInterface:
     def history_dialog_key(self, key):
         songs = self.history_songs()
         last = max(0, len(songs) - 1)
-        if key in ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END"):
+        if key in ("KEY_UP", "KEY_DOWN", "KEY_PGUP", "KEY_PGDOWN", "KEY_HOME", "KEY_END") or key in DIGITS:
             self.history_search = True
         if key in ("KEY_LEFT", "KEY_RIGHT", "KEY_TAB", "KEY_BTAB"):
             self.history_search = not self.history_search
@@ -1153,6 +1177,8 @@ class RadioInterface:
             self.history_sel = 0
         elif key == "KEY_END":
             self.history_sel = last
+        elif key in DIGITS and (int(key) or 10) <= len(songs):
+            self.history_sel = (int(key) or 10) - 1
         elif (key == "f" or (key in ENTER_KEYS and self.history_search)) and songs:
             self.open_search(songs[self.history_sel], back_to="history")
         elif key in ENTER_KEYS + ("KEY_ESCAPE", "KEY_F3"):
@@ -1176,7 +1202,7 @@ class RadioInterface:
             self.web_search(self.search_choice)
         elif key in ENTER_KEYS:
             self.mode = self.search_return
-        elif len(key) == 1 and key.lower() in "byg":
+        elif len(key) == 1 and key.lower() in "bsyg":
             # Each site by its first letter
             self.web_search([name[0].lower() for name, _, _ in SEARCH_SITES].index(key.lower()))
         elif key == "KEY_ESCAPE":
@@ -1388,8 +1414,9 @@ class RadioInterface:
         self.history_search = True
 
     def history_songs(self):
-        # The playing station's songs heard so far, newest first
-        return list(reversed(self.heard_history(self.station)))
+        # The playing station's last songs heard, newest first. Not the jingles: they aren't songs.
+        songs = [song for song in self.heard_history(self.station) if song_kind(song) != "jingle"]
+        return list(reversed(songs))[:HISTORY_SHOWN]
 
     def song_delay(self, station=None):
         # Seconds from a song's start time in the song info to when it is heard. The song info
@@ -1451,6 +1478,9 @@ class RadioInterface:
         if not (song.get("artist") or song.get("song")):
             self.notify("No song info to look for", kind="error")
             return
+        if song_kind(song) == "jingle":
+            self.notify("That's a jingle, not a song")
+            return
         self.mode = "search"
         self.search_song = song
         self.search_choice = self.search_site = SEARCH_DEFAULT
@@ -1458,15 +1488,25 @@ class RadioInterface:
 
     def web_search(self, choice):
         name, setting, with_station = SEARCH_SITES[choice]
-        words = [self.search_song.get("artist", ""), self.search_song.get("song", "")]
-        if with_station:
-            words.append(self.station)
-        query = urllib.parse.quote_plus(" ".join(word for word in words if word))
-        url = self.config["URLS"][setting].replace("{query}", query)
+        spotify_id = self.search_song.get("spotify")
+        if choice == SEARCH_SPOTIFY and spotify_id:
+            url = self.config["URLS"]["spotify_track"].replace("{id}", urllib.parse.quote(spotify_id))
+            done = "Opened the song on Spotify"
+        else:
+            words = [self.search_song.get("artist", ""), self.search_song.get("song", "")]
+            if with_station:
+                words.append(self.station)
+            template = self.config["URLS"][setting]
+            text = " ".join(word for word in words if word)
+            # In the address's path (Spotify), spaces are %20. After a ?, + like a form sends.
+            in_path = "?" not in template.split("{query}")[0]
+            query = urllib.parse.quote(text, safe="") if in_path else urllib.parse.quote_plus(text)
+            url = template.replace("{query}", query)
+            done = f"Opened {name} in the browser"
         self.logger.log.debug(f"Opening {url}")
         try:
             open_url(url)
-            self.notify(f"Opened {name} in the browser")
+            self.notify(done)
         except OSError as e:
             self.logger.log.error(f"Could not open {url}: {e}")
             self.notify("Could not open the browser", kind="error")
@@ -1613,8 +1653,7 @@ class RadioInterface:
 
     def update_title(self):
         # The song and station in the terminal's window or tab title, for when the player is in the background
-        info = self.heard_song()
-        song = " – ".join(part for part in (info.get("artist"), info.get("song")) if part)
+        song = song_line(self.heard_song())
         title = f"{song} · {self.station}" if song else f"{self.station} · Nightride.fm"
         # Control characters in a song name could end the title early
         title = "".join(c for c in title if c.isprintable())
@@ -1638,7 +1677,8 @@ class RadioInterface:
         if song == self.seen_song:
             return
         if self.seen_song and self.seen_song[0] == self.station and (song[1] or song[2]):
-            self.notify("♪ " + " – ".join(part for part in song[1:] if part), SONG_MESSAGE_SECONDS, kind="song")
+            mark = "♪ " if song_kind(info) == "song" else ""
+            self.notify(mark + song_line(info), SONG_MESSAGE_SECONDS, kind="song")
         self.seen_song = song
 
     def save_config(self):
@@ -1863,9 +1903,15 @@ class RadioInterface:
         if artist:
             self.put(top + 4, value_x - 1, f" {artist} ", "artist")
         self.put(top + 5, label_x, "Song", "label")
-        song = self.marquee("song", info.get("song", ""), value_width)
+        # Jingles and live shows get a label at the end of the row, so they aren't taken for songs
+        kind = song_kind(info)
+        badge = {"jingle": " JINGLE ", "live": " LIVE "}.get(kind, "")
+        title = jingle_title(info.get("song", "")) if kind == "jingle" else info.get("song", "")
+        song = self.marquee("song", title, value_width - (len(badge) + 2 if badge else 0))
         if song:
             self.put(top + 5, value_x - 1, f" {song} ", "song")
+        if badge:
+            self.put(top + 5, left + w - 3 - len(badge), badge, "badge")
 
         self.put(top + 6, label_x, "Played", "label")
         if self.api.audioPlayer.error:
@@ -1984,7 +2030,10 @@ class RadioInterface:
         self.put(info_y, left + 3, "Artist", "dialog")
         self.put(info_y, left + 11, self.marquee("stations_artist", info.get("artist", ""), w - 14), "dialog_value")
         self.put(info_y + 1, left + 3, "Song", "dialog")
-        self.put(info_y + 1, left + 11, self.marquee("stations_song", info.get("song", ""), w - 14), "dialog_value")
+        title = info.get("song", "")
+        if song_kind(info) == "jingle":
+            title = f"Jingle – {jingle_title(title)}"
+        self.put(info_y + 1, left + 11, self.marquee("stations_song", title, w - 14), "dialog_value")
 
         buttons_y = top + h - 3
         self.button(buttons_y, left + w // 2 - 12, "  Play  ", self.stations_play, action=self.play_selected_station)
@@ -2075,8 +2124,8 @@ class RadioInterface:
     def draw_history_dialog(self):
         songs = self.history_songs()
         w = min(60, self.cols - 4)
-        self.history_height = max(1, min(len(songs), self.rows - 11))
-        h = self.history_height + 8
+        self.history_height = max(1, min(len(songs), self.rows - 10))
+        h = self.history_height + 7
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
         self.window(top, left, h, w, "dialog", "dialog_border", f"Recently Played: {self.station}")
@@ -2098,8 +2147,7 @@ class RadioInterface:
                 break
             song = songs[i]
             started = time.strftime("%H:%M", time.localtime(song["started_at"] + self.song_delay()))
-            name = " – ".join(part for part in (song["artist"], song["song"]) if part)
-            text = clip(f" {started}  {name}", list_w - 3).ljust(list_w - 2)
+            text = clip(f" {i + 1:>2}  {started}  {song_line(song)}", list_w - 3).ljust(list_w - 2)
             self.put(top + 2 + row, list_x + 1, text, "list_sel" if i == self.history_sel else "list")
             self.zone(top + 2 + row, list_x + 1, list_w - 2, lambda i=i: self.click_history(i))
         self.scrollbar(
@@ -2107,8 +2155,6 @@ class RadioInterface:
             selected=self.history_sel,
         )
 
-        info_y = top + self.history_height + 3
-        self.put(info_y, left + 3, clip("Songs from about the last hour, newest first", w - 6), "dialog")
         buttons_y = top + h - 3
         self.button(
             buttons_y, left + w // 2 - 12, "  Find  ", self.history_search,
@@ -2120,7 +2166,7 @@ class RadioInterface:
         )
 
     def draw_search_dialog(self):
-        w = 44
+        w = 48
         h = 10
         top = 1 + (self.rows - 2 - (h + 1)) // 2
         left = (self.cols - (w + 2)) // 2
@@ -2131,13 +2177,13 @@ class RadioInterface:
             self.put(y, left + (w - text_width(text)) // 2, text, style)
 
         song = self.search_song
-        centered(top + 2, " – ".join(part for part in (song.get("artist"), song.get("song")) if part), "dialog_value")
+        centered(top + 2, song_line(song), "dialog_value")
         centered(top + 4, "Look for it on", "dialog")
         labels = [f" {name} " for name, _, _ in SEARCH_SITES]
-        x = first_x = left + (w - sum(len(label) + 3 for label in labels) + 3) // 2
+        x = first_x = left + (w - sum(len(label) + 2 for label in labels) + 2) // 2
         for i, label in enumerate(labels):
             self.button(top + 5, x, label, i == self.search_choice, action=lambda i=i: self.web_search(i))
-            x += len(label) + 3
+            x += len(label) + 2
         # Cancel goes below the first site
         self.button(
             top + 7, first_x, " Cancel ", self.search_choice == len(SEARCH_SITES), cancel=True,
