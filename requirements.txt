@@ -1,0 +1,6 @@
+blessed
+comtypes; sys_platform == "win32"
+pycaw; sys_platform == "win32"
+python-vlc
+sseclient-py
+urllib3

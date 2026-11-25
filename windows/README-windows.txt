@@ -1,0 +1,24 @@
+Nightride FM player for Windows
+===============================
+
+Double-click nightride.exe, or run it from cmd.exe or PowerShell:
+
+    nightride
+
+The user manual is MANUAL.txt in this folder, also in the player under Help > User manual.
+
+It looks best in Windows Terminal, the default terminal on Windows 11.
+Nothing needs to be installed: Python and VLC are included in this folder.
+Keep the files together. To start it from anywhere, add this folder to your PATH.
+
+If there is no sound, run this to test the audio without the interface:
+
+    nightride --test-stream
+
+Settings: %APPDATA%\nightride\settings.ini
+Log:      %APPDATA%\nightride\radio.log (the last day, at most about 1 MB)
+
+If something goes wrong, start it with "nightride --debug" to log every key press as well.
+
+Includes VLC (https://www.videolan.org/), licensed under the GNU LGPL / GPL.
+See _internal\vlc\VLC-COPYING.txt.

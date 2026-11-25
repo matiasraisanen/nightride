@@ -1,60 +1,102 @@
-# Nightride FM player
-Text-based player for [Nightride FM](https://nightride.fm/) synthwave radio.
+# Nightride
 
-![](./images/player.gif)  
-In this screenshot I am running the player on [cool-retro-term](https://github.com/Swordfish90/cool-retro-term) to give it a bit more retro flavour.  
-The player should work on the terminal emulator of your choice however.
+A terminal player for [Nightride FM](https://nightride.fm/) synthwave radio, in the style of the MS-DOS programs of the early 90s: pull-down menus, dialog boxes and drop shadows, in a terminal window.
 
+![The player: the main screen, the theme preview, browsing the stations and changing the volume](./images/player.gif)
 
-## Code
+This is an unofficial player, not made by Nightride FM. The music and the song info come from their public streams.
 
-[NightrideAPI.py](./NightrideAPI.py)  
-Handles communication with the web audio stream and audio player.
+## Features
 
+- All the Nightride FM stations: nightride, chillsynth, datawave, spacesynth, darksynth, horrorsynth and ebsm
+- The song playing now, and the last 10 songs played. Station jingles and live shows are marked as such.
+- Find the song on Bandcamp, Spotify, YouTube or Google. Spotify opens the song itself when the stream says which one it is.
+- A stereo VU meter that measures the music itself
+- Seven colour themes, from synthwave neon to a green CRT monitor
+- Works with the keyboard and the mouse
+- Linux and Windows, with a stand-alone version for Windows that needs nothing installed
 
-[Radio.py](./Radio.py)  
-Text interface for radio. Handles user input and communicates that to the API.
+## Install
 
+### Windows
 
-[AudioPlayer.py](./AudioPlayer.py)  
-Handles audio player functionality using VLC
+1. Download `nightride-setup.exe` from the [latest release](https://github.com/matiasraisanen/nightride/releases/latest).
+2. Run it. It installs the player for you only, so it doesn't ask for administrator rights.
+3. Start *Nightride player* from the Start menu.
 
+Windows may say *Windows protected your PC*, because the installer isn't signed with a paid certificate. Click *More info*, then *Run anyway*. *Installed apps* in the Windows settings uninstalls it.
 
-[settings.ini](./settings.ini)  
-Various settings for the player
+Or, to run it without installing, download `nightride-windows.zip`, unzip it anywhere, keep the files together, and double-click `nightride.exe`.
 
+Python and VLC are included, so nothing else needs to be installed. It looks best in [Windows Terminal](https://aka.ms/terminal), the default terminal on Windows 11.
 
-[RGB1602.py](./RGB1602.py)  
-Controller for optional [Waveshare RGB1602](https://www.waveshare.com/wiki/LCD1602_RGB_Module) LCD module.
+### Linux
 
-## How to start
-Developed to work on Linux. I might add support for different operating systems later :)
+The player needs [VLC](https://www.videolan.org/vlc/) for the audio, and [uv](https://docs.astral.sh/uv/) to install it.
 
-0. Install dependencies:
+1. Install VLC. On Debian and Ubuntu:
 
-        sudo apt update && sudo apt install vlc
-        
-        pip3 install python-vlc sseclient-py urllib3
+       sudo apt update && sudo apt install vlc
 
-1. Run Radio.py:
+2. Install the player as the `nightride` command:
 
-        python3 Radio.py
+       uv tool install git+https://github.com/matiasraisanen/nightride
 
+3. Run it from any terminal:
+
+       nightride
+
+### From source
+
+To change the code, clone the repository and install it from the project folder with `--editable`. The command then runs the code in that folder, so changes show up without reinstalling:
+
+    uv tool install --editable .
+
+Or run it without installing, in a virtual environment:
+
+    python3 -m venv .venv
+    .venv/bin/pip install -r requirements.txt
+    .venv/bin/python radio.py
+
+On Windows, this needs VLC installed, and 64-bit VLC if your Python is 64-bit.
 
 ## How to use
 
-Press **F1** to pop up a little info screen.
+Change the station with **←** **→** or **1**–**7**, and the volume with **↑** **↓**. **F10** opens the menus, and **F1** shows all the keys.
 
-Press **F2** to open station selector.  
-Use arrow keys **UP** and **DOWN** to choose station, and press **ENTER** to confirm selection.  
-Stations can also be changed using numbers **1** through **9** on the main screen.
+The user manual, [MANUAL.txt](./MANUAL.txt), tells the rest: the keys and menus, Recently played, Find this song, the mouse, the song info sync, Stream info, the settings and files, the command line options, and troubleshooting. In the player, *Help* → *User manual* opens it in your text editor. It comes with the Windows version too.
 
-Press **PLUS** or **MINUS** to change volume.
+## Building the Windows version
 
-Press **F12** to quit.
+On Windows, with [uv](https://docs.astral.sh/uv/) or 64-bit Python installed, in the project folder:
 
-Press **v** to enable/disable the mock VU-meter.
+    powershell -ExecutionPolicy Bypass -File windows\build.ps1
 
-## Notes
+It downloads VLC, checks it, and packs the player, Python and VLC together with [PyInstaller](https://pyinstaller.org/). The result is in `dist\nightride\`, and zipped as `dist\nightride-windows.zip`. With [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed, it also makes the installer `dist\nightride-setup.exe` ([windows/nightride.iss](./windows/nightride.iss)).
 
-You might want to set your terminal window to 52 colums by 10 rows, as that is the aspect ratio to fit the player perfectly.
+GitHub builds them too, on a Windows machine ([.github/workflows/windows.yml](./.github/workflows/windows.yml)):
+
+- **For a release:** set the version in `pyproject.toml`, then publish a release whose tag is that version, like `v2.0.0`. The build attaches `nightride-setup.exe` and `nightride-windows.zip` to the release.
+- **To try a build:** pull requests are built, and *Actions* → *Windows build* → *Run workflow* builds any branch. The files are a download on the run.
+
+The icon is [windows/nightride.svg](./windows/nightride.svg), and [windows/nightride-alt.svg](./windows/nightride-alt.svg) is a spare in other colours. After changing the icon, `python windows/make_icon.py` (with `cairosvg` and `pillow` installed) makes `windows/nightride.ico` again.
+
+## Code
+
+| File | |
+|---|---|
+| [radio.py](./radio.py) | The interface: drawing the screens, keys, mouse and menus |
+| [screen.py](./screen.py) | Draws on the terminal, sending only what changed |
+| [nightride_api.py](./nightride_api.py) | Reads the song info stream, and keeps the recently played songs |
+| [audio_player.py](./audio_player.py) | Plays the audio streams with VLC, and reconnects when they drop |
+| [level_meter.py](./level_meter.py) | Measures the audio level for the VU meter |
+| [audio_streams.py](./audio_streams.py) | Finds the player's own audio stream in PulseAudio or PipeWire |
+| [win_audio.py](./win_audio.py) | Finds the player's own audio session on Windows, and reads its level |
+| [settings.py](./settings.py) | Reads and saves settings.ini, with defaults for anything missing |
+| [paths.py](./paths.py) | Where the settings, log and history files go |
+| [logger.py](./logger.py) | Logging, with old entries trimmed away |
+| [windows/](./windows/) | The Windows build |
+
+## License
+
+[GPL-3.0](./LICENSE). The Windows version includes [VLC](https://www.videolan.org/), licensed under the GNU LGPL and GPL.

@@ -30,10 +30,6 @@
                 "splitMode": "duplicate"
             },
             "keys": "alt+shift+d"
-        },
-        {
-            "command": "toggleFocusMode",
-            "keys": "esc"
         }
     ],
     "alwaysOnTop": true,
@@ -41,8 +37,8 @@
     "copyFormatting": "none",
     "copyOnSelect": false,
     "defaultProfile": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
-    "initialCols": 52,
-    "initialRows": 10,
+    "initialCols": 80,
+    "initialRows": 25,
     "initialPosition": "2868, 1132",
     "profiles": 
     {

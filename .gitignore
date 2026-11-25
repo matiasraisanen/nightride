@@ -1,2 +1,6 @@
 __pycache__
 radio.log
+.venv
+*.egg-info
+build
+dist

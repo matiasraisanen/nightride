@@ -1,0 +1,303 @@
+NIGHTRIDE - USER MANUAL
+=======================
+
+A terminal player for Nightride FM synthwave radio (https://nightride.fm/), in
+the style of the MS-DOS programs of the early 90s.
+
+This is an unofficial player, not made by Nightride FM. The music and the song
+info come from their public streams.
+
+In the player, Help > User manual opens this file.
+
+
+Contents
+
+  1. Starting the player
+  2. The main screen
+  3. Menus
+  4. Recently played
+  5. Find this song
+  6. Jingles and live shows
+  7. Mouse
+  8. Messages
+  9. Song info and the audio sync
+ 10. Stream info
+ 11. Settings and files
+ 12. Troubleshooting
+
+
+1. STARTING THE PLAYER
+----------------------
+
+Run "nightride" in a terminal. On Windows, start "Nightride player" from the
+Start menu, or double-click nightride.exe if you use the zip version.
+
+  nightride --test-stream [STATION]
+      Plays a station for a few seconds without the interface, and says
+      whether it worked.
+
+  nightride --debug
+      Logs every key press and more, for finding bugs.
+
+  nightride --version
+      Shows the version.
+
+The player starts on the station and volume you used last.
+
+
+2. THE MAIN SCREEN
+------------------
+
+The main screen shows the station, the artist and song playing, how long the
+station has played, the volume, and the VU meter.
+
+  Left, Right or 1-7    Change station
+  Up, Down              Volume in steps of 10
+  Shift-Up, Shift-Down  Volume in steps of 1
+  M                     Mute
+  F2                    Stations
+  F3                    Recently played
+  F                     Find this song
+  V                     VU meter on or off
+  C, D                  Clock, date on or off
+  T, Shift-T            Next, previous theme
+  F10                   Menus, or Alt and the red letter of a menu
+  F1                    All the keys
+  Esc                   Exit, after asking
+  Alt-X, F12            Exit right away
+
+In the menus and dialogs, the arrow keys and Tab move, Enter chooses and Esc
+closes.
+
+
+3. MENUS
+--------
+
+Press F10, or Alt and the red letter of a menu, like Alt-R for Radio.
+
+  Radio     Stations, Recently played, Find this song, Mute, Exit
+  Options   VU meter, Clock, Date, Mouse, and Settings
+  Theme     The colour themes
+  Help      Keys, User manual, Stream info, the Nightride.fm website, About
+
+Themes: the highlighted theme shows right away. Enter keeps it, and Esc goes
+back to the one you had.
+
+  Synthwave   Purple and cyan on dark grey (the default)
+  Outrun      Neon pink, orange and yellow on navy
+  Darksynth   Blood red and grey on black
+  DOS         The classic blue MS-DOS look
+  C64         Light blue on dark blue, like a Commodore 64
+  Amber CRT   A single-colour amber monitor
+  Green CRT   A single-colour green monitor
+
+Settings has the station and volume to start with (by default the ones you
+used last), the clock and date formats, syncing the song info with the audio,
+and which messages to show.
+
+
+4. RECENTLY PLAYED
+------------------
+
+F3 lists the last 10 songs on the station playing, newest first, with the time
+each one started. Number 1 is the song playing now.
+
+Pick a song with the arrow keys or its number (0 for the 10th), and press
+Enter or F to find it.
+
+The list covers your current listening session, also past midnight. It is kept
+when you restart the player, and starts afresh after two hours without song
+info: when the player has been closed, or the computer asleep or offline.
+
+Station jingles are left out of the list. Live shows are in it, marked "Live".
+
+
+5. FIND THIS SONG
+-----------------
+
+F, or clicking the artist or song, asks where to look for the song:
+
+  Bandcamp   Buying the track on Bandcamp is the best way to support the
+             artist, so it comes first.
+  Spotify    Opens the song itself when the station's stream says which song
+             it is on Spotify, which it does for about half the songs.
+             Otherwise it searches Spotify.
+  YouTube    Searches YouTube.
+  Google     Searches Google, with the station's name added.
+
+Press the first letter of a site (B, S, Y, G), or move to it and press Enter.
+It opens in your web browser.
+
+
+6. JINGLES AND LIVE SHOWS
+-------------------------
+
+Between songs, Nightride FM plays short jingles read by artists, like "Jingle
+by Retrax". They show with a JINGLE label next to the song, and aren't songs
+to find, so F says so instead.
+
+Live shows show with a LIVE label, and as "Live: <show>" in the messages.
+
+
+7. MOUSE
+--------
+
+- Click the menus, the buttons, and the key hints on the bottom line.
+- In Stations and Recently played, click to pick a row, and double-click to
+  play the station or find the song.
+- On the main screen, click the station to open Stations, and the artist or
+  song to find it. Click the volume bar to set the volume, the arrows next to
+  it to step by 10, and the number to mute.
+- The scroll wheel changes the volume on the main screen, and scrolls the
+  lists.
+
+While the player has the mouse, most terminals select text with Shift held
+down. Options > Mouse turns the mouse off.
+
+
+8. MESSAGES
+-----------
+
+A message above the bottom line says what a key did, shows each new song, and
+tells when something goes wrong. Settings > Notifications chooses which ones
+show.
+
+The song and the station are also in the terminal's window title. Some
+terminals, like Konsole, only show titles set by programs if their tab title
+format includes %w.
+
+
+9. SONG INFO AND THE AUDIO SYNC
+-------------------------------
+
+Nightride FM's song info comes about 16 seconds before you hear the song, so
+the player measures the delay and shows each song when it starts in the audio.
+
+The delay is how far the player is behind the live stream, which VLC reports,
+plus how long after the song info the song starts in the stream, which the
+player checks twice an hour from the song titles in the stream (about 0.7 MB
+each time). If it can't measure them, it shows the song info as it comes, says
+"Song info is not in sync with the audio", and the log tells why.
+
+Settings > Sync song info turns syncing off.
+
+
+10. STREAM INFO
+---------------
+
+Help > Stream info shows how the stream is doing. It updates while it is open.
+
+  Station         The station playing.
+  Address         Where the audio comes from.
+  Status          Playing for how long, or Connecting, Reconnecting, Stream
+                  error (it keeps trying), No audio output or Stopped.
+  Format          What the stream server says it sends: the audio format,
+                  bitrate, sample rate, and mono or stereo. It is checked each
+                  time the dialog opens.
+  Received        The data received since the station started playing, and the
+                  bitrate VLC measures. The bitrate shows after a few seconds.
+  Dropouts        Trouble VLC has counted: "lost" is audio that came too late
+                  to play, heard as a skip, "broken" is data that couldn't be
+                  read, and "gaps" are breaks in the stream. "None" is how it
+                  should be.
+  Reconnects      How many times the stream has dropped and the player
+                  connected again, since the station was chosen.
+  Behind live     How far the audio you hear is behind the live stream. The
+                  server starts each listener with some seconds of past audio.
+  Song info feed  Whether the player is connected to Nightride FM's song info,
+                  which says what each station is playing. It is a separate
+                  connection from the audio, so the music can play while it is
+                  down.
+  Song info gap   How long after the song info a song starts in the live
+                  stream, and when that was measured. "From before" means the
+                  value is from an earlier run, and hasn't been measured again
+                  yet.
+  Sync            How long after the song info each song shows on the screen:
+                  Behind live plus Song info gap. See section 9.
+
+
+11. SETTINGS AND FILES
+----------------------
+
+  Linux
+    Settings         ~/.config/nightride/settings.ini
+    Log              ~/.local/state/nightride/radio.log
+    Recently played  ~/.local/state/nightride/history.json
+
+  Windows
+    Settings         %APPDATA%\nightride\settings.ini
+    Log              %APPDATA%\nightride\radio.log
+    Recently played  %APPDATA%\nightride\history.json
+
+Most settings can be changed in the player, but settings.ini can also be
+edited by hand while the player is closed:
+
+  default_station       Station to start on, or "last" for the one played last.
+  start_volume          Volume to start with, 0 to 99, or "last" for the one
+                        used last.
+  clock_format,         The clock and date formats in use, as strftime formats
+  date_format           (https://strftime.org).
+  clock_formats,        The formats Settings cycles through. Add and remove
+  date_formats          them freely, one per line, indented. A format that
+                        doesn't work is left out, with a message, and the log
+                        says why.
+  notifications         "all", "off", or any of "songs", "actions" and
+                        "errors", separated by commas.
+  sync_song_info        True to show each song when it starts in the audio,
+                        False when the song info says.
+  theme                 One of the theme names.
+  vu_meter, clock,      True or False.
+  date, mouse
+  [STATIONS]            The stations and their number keys.
+  [URLS]                The stream and song info addresses, the website, and
+                        the sites for Find this song. {query} is replaced with
+                        the song, and {id} in spotify_track with its Spotify
+                        ID.
+
+The log is kept across restarts, with each start and exit marked. It keeps the
+last day, and at most about 1 MB.
+
+
+12. TROUBLESHOOTING
+-------------------
+
+No sound
+  "nightride --test-stream" plays a station without the interface, and says
+  whether it worked. The log may say more.
+
+A key does nothing
+  The terminal may use it for something of its own, like F10 or Esc. Unbind it
+  in the terminal's settings, or use the menus.
+
+NO AUDIO OUTPUT
+  VLC is playing but can't reach the sound system, for example when PipeWire
+  is stuck. This warning only works on Linux for now.
+
+The VU meter says it needs something
+  On Linux, it needs parec and pactl, which come with PulseAudio and PipeWire
+  (package pulseaudio-utils on Debian and Ubuntu).
+
+Clicks select text in cmd.exe
+  The player turns off QuickEdit while it runs, so clicks reach it. If they
+  still select text, turn QuickEdit off in the window's properties.
+
+The window is too small
+  The player needs at least 50 columns by 14 rows, or 16 with the VU meter on.
+  It looks best at 80 by 25, like in the old days.
+
+The colours look off
+  The themes show their exact colours in terminals with true colour, like
+  Konsole and Windows Terminal. Other terminals get the closest colours they
+  have.
+
+About the VU meter
+  On Linux, it records the player's own audio from PulseAudio or PipeWire, and
+  shows its average level. On Windows, it reads the same meter as the Windows
+  volume mixer. That meter gives the loudest samples rather than the average,
+  so the player takes 9 dB off them to read like the Linux meter. Both measure
+  the music itself, so the volume doesn't change them, but they drop to zero
+  while muted.
+
+
+Nightride player is free software under the GPL-3.0 license.
+https://github.com/matiasraisanen/nightride
